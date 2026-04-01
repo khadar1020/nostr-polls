@@ -132,8 +132,8 @@ const Likes: React.FC<LikesProps> = ({ pollEvent }) => {
               width: 20,
               height: 20,
               borderRadius: "50%",
-              backgroundColor: "#FAD13F",
-              color: "#000",
+              backgroundColor: theme.palette.primary.main,
+              color: theme.palette.primary.contrastText,
               fontSize: 12,
             }}
           >

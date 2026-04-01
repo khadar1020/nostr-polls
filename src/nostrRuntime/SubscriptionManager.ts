@@ -24,6 +24,8 @@ export class SubscriptionManager {
   private eventStore: EventStore;
   /** How many distinct ManagedSubscriptions are using each relay URL */
   private relayRefCounts: Map<string, number> = new Map();
+  /** Pending deferred close timers — cancelled if relay is re-retained before they fire */
+  private relayCloseTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   constructor(pool: SimplePool, eventStore: EventStore) {
     this.pool = pool;
@@ -32,6 +34,12 @@ export class SubscriptionManager {
 
   private retainRelays(relays: string[]): void {
     for (const url of relays) {
+      // Cancel any pending deferred close so the WebSocket stays alive.
+      const timer = this.relayCloseTimers.get(url);
+      if (timer) {
+        clearTimeout(timer);
+        this.relayCloseTimers.delete(url);
+      }
       this.relayRefCounts.set(url, (this.relayRefCounts.get(url) ?? 0) + 1);
     }
   }
@@ -41,9 +49,17 @@ export class SubscriptionManager {
       const count = (this.relayRefCounts.get(url) ?? 1) - 1;
       if (count <= 0) {
         this.relayRefCounts.delete(url);
-        // Close the underlying WebSocket — no subscriptions need this relay anymore.
-        // nostr-tools will open a fresh connection next time it's needed.
-        this.pool.close([url]);
+        // Defer closing by 30 s. Immediate close was causing "connection error"
+        // on the next publish/subscribe because the WebSocket was torn down
+        // between the end of a subscription and the start of the next operation.
+        const timer = setTimeout(() => {
+          this.relayCloseTimers.delete(url);
+          // Only close if nothing re-retained this relay in the meantime.
+          if (!this.relayRefCounts.has(url)) {
+            this.pool.close([url]);
+          }
+        }, 30_000);
+        this.relayCloseTimers.set(url, timer);
       } else {
         this.relayRefCounts.set(url, count);
       }
@@ -316,6 +332,11 @@ export class SubscriptionManager {
     for (const subscriptionId of Array.from(this.subscriptions.keys())) {
       this.closeSubscription(subscriptionId);
     }
+    for (const [url, timer] of Array.from(this.relayCloseTimers)) {
+      clearTimeout(timer);
+      this.pool.close([url]);
+    }
+    this.relayCloseTimers.clear();
     this.relayRefCounts.clear();
   }
 

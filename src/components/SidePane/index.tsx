@@ -1,9 +1,12 @@
 import React, { useState } from "react";
 import {
+  BottomNavigation,
+  BottomNavigationAction,
   Box,
   IconButton,
   Menu,
   MenuItem,
+  Paper,
   Tooltip,
   Typography,
   useMediaQuery,
@@ -65,7 +68,7 @@ const feedOptions: { value: string; label: string; Icon: SvgIconComponent }[] = 
   { value: "topics",       label: "Topics",       Icon: TagIcon },
   { value: "notes",        label: "Notes",        Icon: ArticleIcon },
   { value: "movies",       label: "Movies",       Icon: MovieIcon },
-  { value: "follow-packs", label: "Follow Packs", Icon: PeopleIcon },
+  { value: "follow-packs", label: "Packs",        Icon: PeopleIcon },
 ];
 
 interface NavSidebarProps {
@@ -98,13 +101,15 @@ const NavSidebar: React.FC<NavSidebarProps> = ({ open, onToggle }) => {
     e: React.MouseEvent<HTMLElement>,
     feedValue: string
   ) => {
-    if (!isDesktop && MOBILE_SUB_ITEMS[feedValue]) {
-      // Mobile: open sub-items popup without navigating yet
-      setMenuAnchor(e.currentTarget);
-      setMenuFeed(feedValue);
-      return;
+    if (MOBILE_SUB_ITEMS[feedValue]) {
+      // Open sub-items popup (both mobile bottom nav and desktop sidebar)
+      if (!isDesktop) {
+        setMenuAnchor(e.currentTarget);
+        setMenuFeed(feedValue);
+        return;
+      }
     }
-    // Desktop, or feed has no sub-items (movies): navigate directly
+    // Desktop feed with no sub-items, or direct nav: navigate
     localStorage.setItem("pollerama:lastFeed", feedValue);
     navigate(`/feeds/${feedValue}`);
   };
@@ -129,11 +134,96 @@ const NavSidebar: React.FC<NavSidebarProps> = ({ open, onToggle }) => {
     setMenuFeed(null);
   };
 
+  // ── Mobile: fixed bottom navigation bar ──────────────────────────────────
+  if (!isDesktop) {
+    return (
+      <>
+        {/* Spacer so content doesn't render behind the fixed bottom nav */}
+        <Box sx={{ display: "none" }} />
+
+        <Paper
+          elevation={3}
+          sx={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: theme.zIndex.appBar,
+          }}
+        >
+          <BottomNavigation
+            value={currentFeed}
+            showLabels
+            sx={{ height: 56 }}
+          >
+            {feedOptions.map(({ value, label, Icon }) => (
+              <BottomNavigationAction
+                key={value}
+                label={label}
+                value={value}
+                icon={<Icon />}
+                onClick={(e) => handleFeedClick(e, value)}
+                sx={{
+                  minWidth: 0,
+                  "& .MuiBottomNavigationAction-label": {
+                    fontSize: "0.65rem",
+                  },
+                }}
+              />
+            ))}
+          </BottomNavigation>
+        </Paper>
+
+        {/* Sub-items popup — anchored above the tapped nav action */}
+        <Menu
+          anchorEl={menuAnchor}
+          open={Boolean(menuAnchor)}
+          onClose={() => { setMenuAnchor(null); setMenuFeed(null); }}
+          anchorOrigin={{ vertical: "top", horizontal: "center" }}
+          transformOrigin={{ vertical: "bottom", horizontal: "center" }}
+          slotProps={{ paper: { sx: { minWidth: 180 } } }}
+        >
+          {menuFeed &&
+            (MOBILE_SUB_ITEMS[menuFeed] || []).map((item) => {
+              const contextItem =
+                menuFeed === currentFeed
+                  ? subNavItems.find((s) => s.key === item.key)
+                  : undefined;
+              const isActive = contextItem
+                ? contextItem.active
+                : getActiveSub(menuFeed) === item.key;
+              const isDisabled = contextItem ? !!contextItem.disabled : false;
+
+              return (
+                <MenuItem
+                  key={item.key}
+                  selected={isActive}
+                  disabled={isDisabled}
+                  onClick={() => handleMobileSubItemClick(item.key)}
+                  sx={{
+                    fontSize: "0.875rem",
+                    "&.Mui-selected": {
+                      color: "primary.main",
+                      fontWeight: 600,
+                      bgcolor: (t) => alpha(t.palette.primary.main, 0.1),
+                    },
+                  }}
+                >
+                  {item.label}
+                </MenuItem>
+              );
+            })}
+        </Menu>
+      </>
+    );
+  }
+
+  // ── Desktop: left sidebar ─────────────────────────────────────────────────
   return (
     <>
       <Box
         sx={{
-          width: open ? (isDesktop ? 200 : 52) : 0,
+          width: open ? 200 : 0,
           flexShrink: 0,
           height: "100%",
           borderRight: open ? `1px solid ${theme.palette.divider}` : "none",
@@ -148,37 +238,36 @@ const NavSidebar: React.FC<NavSidebarProps> = ({ open, onToggle }) => {
         {feedOptions.map(({ value, label, Icon }) => {
           const active = currentFeed === value;
 
-          const feedItem = (
-            <Box
-              onClick={(e) => handleFeedClick(e, value)}
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: isDesktop ? "flex-start" : "center",
-                gap: isDesktop ? 1.5 : 0,
-                px: isDesktop ? 2 : 0,
-                py: 1.25,
-                mx: 0.75,
-                borderRadius: 2,
-                cursor: "pointer",
-                color: active ? "primary.main" : "text.secondary",
-                bgcolor: active
-                  ? alpha(theme.palette.primary.main, 0.12)
-                  : "transparent",
-                fontWeight: active ? 700 : 400,
-                "&:hover": {
+          return (
+            <React.Fragment key={value}>
+              <Box
+                onClick={(e) => handleFeedClick(e, value)}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  px: 2,
+                  py: 1.25,
+                  mx: 0.75,
+                  borderRadius: 2,
+                  cursor: "pointer",
+                  color: active ? "primary.main" : "text.secondary",
                   bgcolor: active
-                    ? alpha(theme.palette.primary.main, 0.18)
-                    : alpha(theme.palette.text.primary, 0.06),
-                },
-                transition: "background-color 0.15s, color 0.15s",
-              }}
-            >
-              <Icon
-                fontSize="small"
-                sx={{ color: active ? "primary.main" : "text.secondary" }}
-              />
-              {isDesktop && (
+                    ? alpha(theme.palette.primary.main, 0.12)
+                    : "transparent",
+                  fontWeight: active ? 700 : 400,
+                  "&:hover": {
+                    bgcolor: active
+                      ? alpha(theme.palette.primary.main, 0.18)
+                      : alpha(theme.palette.text.primary, 0.06),
+                  },
+                  transition: "background-color 0.15s, color 0.15s",
+                }}
+              >
+                <Icon
+                  fontSize="small"
+                  sx={{ color: active ? "primary.main" : "text.secondary" }}
+                />
                 <Box
                   component="span"
                   sx={{
@@ -189,27 +278,10 @@ const NavSidebar: React.FC<NavSidebarProps> = ({ open, onToggle }) => {
                 >
                   {label}
                 </Box>
-              )}
-            </Box>
-          );
-
-          return (
-            <React.Fragment key={value}>
-              {/* Feed item — tooltip on mobile only */}
-              {isDesktop ? (
-                feedItem
-              ) : (
-                <Tooltip
-                  title={MOBILE_SUB_ITEMS[value] ? `${label} ›` : label}
-                  placement="right"
-                  arrow
-                >
-                  <Box>{feedItem}</Box>
-                </Tooltip>
-              )}
+              </Box>
 
               {/* Desktop: inline sub-nav items below the active feed */}
-              {isDesktop && active && subNavItems.length > 0 && (
+              {active && subNavItems.length > 0 && (
                 <Box sx={{ mb: 0.5 }}>
                   {subNavItems.map((item) => (
                     <Box
@@ -258,8 +330,9 @@ const NavSidebar: React.FC<NavSidebarProps> = ({ open, onToggle }) => {
             </React.Fragment>
           );
         })}
+
         {/* Collapse button — pinned to bottom */}
-        <Box sx={{ mt: "auto", display: "flex", justifyContent: isDesktop ? "flex-end" : "center", px: 0.5, pb: 0.5 }}>
+        <Box sx={{ mt: "auto", display: "flex", justifyContent: "flex-end", px: 0.5, pb: 0.5 }}>
           <Tooltip title="Hide sidebar" placement="right">
             <IconButton size="small" onClick={onToggle}>
               <ChevronLeftIcon fontSize="small" />
@@ -268,7 +341,7 @@ const NavSidebar: React.FC<NavSidebarProps> = ({ open, onToggle }) => {
         </Box>
       </Box>
 
-      {/* Mobile: sub-nav as a popup Menu (static config, active state from localStorage) */}
+      {/* Desktop: sub-nav popup (only opened from desktop when hasSubItems) */}
       <Menu
         anchorEl={menuAnchor}
         open={Boolean(menuAnchor)}
@@ -279,7 +352,6 @@ const NavSidebar: React.FC<NavSidebarProps> = ({ open, onToggle }) => {
       >
         {menuFeed &&
           (MOBILE_SUB_ITEMS[menuFeed] || []).map((item) => {
-            // For the active feed, use the live context state (handles disabled etc.)
             const contextItem =
               menuFeed === currentFeed
                 ? subNavItems.find((s) => s.key === item.key)

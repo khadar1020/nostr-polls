@@ -161,7 +161,7 @@ function UnifiedFeed<T>({
   const feedContent = (
     <>
       <div ref={containerRef} style={{ height: "100%" }}>
-        {(refreshing || showLoading) && (
+        {(refreshing || showLoading || loadingMore) && (
           <LinearProgress
             sx={{
               position: "absolute",

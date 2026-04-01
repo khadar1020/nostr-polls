@@ -120,7 +120,7 @@ const Zap: React.FC<ZapProps> = ({ pollEvent }) => {
             <FlashOn
               sx={(theme) => {
                 return {
-                  color: "#FAD13F",
+                  color: theme.palette.primary.main,
                   "& path": {
                     ...getColorsWithTheme(theme, {
                       stroke: "#000000",

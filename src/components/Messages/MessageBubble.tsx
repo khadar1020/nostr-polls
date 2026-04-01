@@ -52,7 +52,7 @@ interface MessageBubbleProps {
   onLongPress: (msg: DMMessage) => void;
   onReact: (emoji: string, msgId: string) => void;
   onSwipeReply: (msg: DMMessage) => void;
-  onRetry?: () => void;
+  onRetry?: (relay?: string) => void;
 }
 
 // Renders an emoji or a custom emoji shortcode like :name:
@@ -100,11 +100,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const sent = {
     bg:          isDark ? "#5C4A00"               : "#FEF3C7",
     text:        isDark ? "rgba(255,255,255,0.88)" : "rgba(0,0,0,0.87)",
-    link:        isDark ? "#FAD13F"               : "#7A5C00",
+    link:        theme.palette.primary.main,
     subtext:     isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)",
     quoteBorder: isDark ? "rgba(250,209,63,0.5)"  : "rgba(218,165,32,0.6)",
     quoteBg:     isDark ? "rgba(0,0,0,0.25)"      : "rgba(0,0,0,0.05)",
-    quoteName:   isDark ? "#FAD13F"               : "#7A5C00",
+    quoteName:   theme.palette.primary.main,
     quoteText:   isDark ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.6)",
   };
 
@@ -285,7 +285,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               wordBreak: "break-word",
               fontSize: "0.875rem",
               "& a": {
-                color: isMine ? sent.link : "#FAD13F",
+                color: isMine ? sent.link : theme.palette.primary.main,
               },
             }}
           >
@@ -354,7 +354,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                   <Typography
                     variant="caption"
                     color="primary"
-                    onClick={onRetry}
+                    onClick={() => onRetry()}
                     sx={{ fontSize: "0.7rem", cursor: "pointer", textDecoration: "underline" }}
                   >
                     Retry
@@ -386,8 +386,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             message: sendStatus.reasons[relay],
             latencyMs: sendStatus.latencies[relay],
           }))}
-          onRetry={onRetry ? async (_relay?: string) => {
-            onRetry();
+          onRetry={onRetry ? async (relay?: string) => {
+            onRetry(relay);
             return Object.entries(sendStatus.relays).map(([relay, status]) => ({
               relay,
               status,

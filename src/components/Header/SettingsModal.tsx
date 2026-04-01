@@ -5,6 +5,7 @@ import { RelayAnalytics } from "./RelayAnalytics";
 import { AISettings } from "./AISettings";
 import { BlossomSettings } from "./BlossomSettings";
 import { ModerationSettings } from "./ModerationSettings";
+import { AppearanceSettings } from "./AppearanceSettings";
 import { useBackClose } from "../../hooks/useBackClose";
 
 interface SettingsModalProps {
@@ -51,6 +52,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           scrollButtons="auto"
           sx={{ mb: 2, minHeight: 36 }}
         >
+          <Tab label="Appearance" />
           <Tab label="Relay Settings" />
           <Tab label="Relay Analytics" />
           <Tab label="AI Settings" />
@@ -59,11 +61,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </Tabs>
 
         <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
-          {tabIndex === 0 && <RelaySettings />}
-          {tabIndex === 1 && <RelayAnalytics />}
-          {tabIndex === 2 && <AISettings />}
-          {tabIndex === 3 && <BlossomSettings />}
-          {tabIndex === 4 && <ModerationSettings />}
+          {tabIndex === 0 && <AppearanceSettings />}
+          {tabIndex === 1 && <RelaySettings />}
+          {tabIndex === 2 && <RelayAnalytics />}
+          {tabIndex === 3 && <AISettings />}
+          {tabIndex === 4 && <BlossomSettings />}
+          {tabIndex === 5 && <ModerationSettings />}
         </Box>
       </Box>
     </Modal>

@@ -1452,6 +1452,21 @@
   resolved "https://registry.yarnpkg.com/@eslint/js/-/js-8.57.1.tgz#de633db3ec2ef6a3c89e2f19038063e8a122e2c2"
   integrity sha512-d9zaMRSTIKDLhctzH12MtXvJKSSUhaHcjV+2Z+GK+EEY7XKpP5yR4x+N3TAcHTcu963nIr+TMcCb4DBCYX1z6Q==
 
+"@fontsource-variable/comfortaa@^5.2.8":
+  version "5.2.8"
+  resolved "https://registry.yarnpkg.com/@fontsource-variable/comfortaa/-/comfortaa-5.2.8.tgz#7ce2094705c55e77758cbd8594f6c7765a9adbf8"
+  integrity sha512-8YqOYbeHxywYtMD/AtNc7SHTIk3UufmYdgwVHBwFUe5wxjT7QM1NJ64M5M+qtNTenPEkQl8JU5Be3+EZl8dhMA==
+
+"@fontsource-variable/fredoka@^5.2.10":
+  version "5.2.10"
+  resolved "https://registry.yarnpkg.com/@fontsource-variable/fredoka/-/fredoka-5.2.10.tgz#fd4503c89934882d07a42174b56415abbb08eb65"
+  integrity sha512-W25a41EivYh8111C9x34ShRg+2kKGXnefg1Z9Zax5E0jOgOtGXn7UhoqVBvNLrJnWGv3hy8New0UiKDc/cYzPg==
+
+"@fontsource-variable/raleway@^5.2.8":
+  version "5.2.8"
+  resolved "https://registry.yarnpkg.com/@fontsource-variable/raleway/-/raleway-5.2.8.tgz#88219fff3c6c426e3af7cf2eafe6bfcc89124918"
+  integrity sha512-PahqGI7bkz4a80m91Jt65DRsuFQmRip5vGDbI9sChVSKjLrdDfXbeGIwnTPi/ZVCOoQrbLnqzBOLQpLohnz+WA==
+
 "@humanwhocodes/config-array@^0.13.0":
   version "0.13.0"
   resolved "https://registry.yarnpkg.com/@humanwhocodes/config-array/-/config-array-0.13.0.tgz#fb907624df3256d04b9aa2df50d7aa97ec648748"

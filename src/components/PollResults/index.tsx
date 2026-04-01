@@ -51,22 +51,45 @@ export const PollResults = () => {
       return;
     }
 
-    const resultFilter: Filter = {
-      "#e": [eventId!],
-      kinds: [1070, 1018],
-    };
+    const resultFilter: Filter = { "#e": [eventId!], kinds: [1070, 1018] };
     const pollFilter: Filter = { ids: [eventId!] };
 
-    const closer = nostrRuntime.subscribe(relays, [resultFilter, pollFilter], {
-      onEvent: handleResultEvent,
+    // NIP-88: poll event contains ["relay", "wss://..."] tags specifying where
+    // responses were published. Include those relays from the start if cached,
+    // or add them via a secondary subscription when the poll event arrives.
+    const cachedPoll = nostrRuntime.get(eventId);
+    const pollRelays = cachedPoll?.tags
+      .filter(t => t[0] === 'relay' && t[1]).map(t => t[1]) ?? [];
+    const queryRelays = Array.from(new Set([...relays, ...pollRelays]));
+
+    let extraUnsub: (() => void) | null = null;
+
+    const closer = nostrRuntime.subscribe(queryRelays, [resultFilter, pollFilter], {
+      onEvent: (event) => {
+        handleResultEvent(event);
+        // When the poll event arrives, subscribe for results on any relay tags
+        // not already covered by queryRelays.
+        if (event.kind === 1068) {
+          const newRelays = event.tags
+            .filter(t => t[0] === 'relay' && t[1] && !queryRelays.includes(t[1]))
+            .map(t => t[1]);
+          if (newRelays.length > 0) {
+            const extra = nostrRuntime.subscribe(newRelays, [resultFilter], {
+              onEvent: handleResultEvent,
+            });
+            extraUnsub = extra.unsubscribe;
+          }
+        }
+      },
       onEose: () => setEoseReceived(true),
     });
 
-    // Fallback: mark EOSE after 6s in case the relay doesn't send one
+    // Fallback: mark EOSE after 6s in case relays don't send one
     const fallback = setTimeout(() => setEoseReceived(true), 6000);
 
     return () => {
       closer.unsubscribe();
+      extraUnsub?.();
       clearTimeout(fallback);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

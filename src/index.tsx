@@ -1,6 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
+import "./fonts/shantell.css";
+import "@fontsource-variable/fredoka";
+import "@fontsource-variable/comfortaa";
+import "@fontsource-variable/raleway";
 import App from "./App";
 
 const root = ReactDOM.createRoot(

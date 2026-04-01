@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, Box, Typography } from "@mui/material";
+import { Avatar, Box, Typography, useTheme } from "@mui/material";
 import { nip19 } from "nostr-tools";
 import { useAppContext } from "../../hooks/useAppContext";
 import { openProfileTab } from "../../nostr";
@@ -16,6 +16,7 @@ const OverlappingAvatars: React.FC<OverlappingAvatarsProps> = ({
   maxAvatars = 5,
 }) => {
   const navigate = useNavigate();
+  const theme = useTheme();
   let { profiles, fetchUserProfileThrottled } = useAppContext();
 
   useEffect(() => {
@@ -66,8 +67,8 @@ const OverlappingAvatars: React.FC<OverlappingAvatarsProps> = ({
             height: 24,
             position: "absolute",
             left: `${Math.min(maxAvatars, visibleIds.length) * 18}px`,
-            backgroundColor: "#FAD13F",
-            color: "black",
+            backgroundColor: theme.palette.primary.main,
+            color: theme.palette.primary.contrastText,
             zIndex: 0,
             fontSize: 6,
           }}

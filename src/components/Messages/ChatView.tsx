@@ -138,30 +138,39 @@ const ChatView: React.FC = () => {
     });
   }, [updateRelayStatus]);
 
-  const handleRetry = useCallback((rumorId: string) => {
+  const handleRetry = useCallback((rumorId: string, relay?: string) => {
     const status = sendStatuses.get(rumorId);
     if (!status) return;
 
-    const resetRelays = Object.fromEntries(
-      Object.keys(status.relays).map(r => [r, "pending" as RelayStatus])
-    );
-    setSendStatuses(prev => new Map(prev).set(rumorId, { ...status, relays: resetRelays, reasons: {} }));
+    const relaysToRetry = relay
+      ? [relay]
+      : Object.keys(status.relays).filter(r => status.relays[r] !== "sent");
 
-    const trackedRelays = new Set(Object.keys(status.relays));
+    setSendStatuses(prev => {
+      const s = prev.get(rumorId);
+      if (!s) return prev;
+      const reset = Object.fromEntries(relaysToRetry.map(r => [r, "pending" as RelayStatus]));
+      const reasons = Object.fromEntries(
+        Object.entries(s.reasons).filter(([r]) => !relaysToRetry.includes(r))
+      );
+      return new Map(prev).set(rumorId, { ...s, relays: { ...s.relays, ...reset }, reasons });
+    });
+
     status.retryWraps.forEach(({ event, relays }) => {
-      const pubs = pool.publish(relays, event);
-      relays.forEach((relay, i) => {
-        if (!trackedRelays.has(relay)) return;
+      const targets = relays.filter(r => relaysToRetry.includes(r));
+      if (targets.length === 0) return;
+      const pubs = pool.publish(targets, event);
+      targets.forEach((r, i) => {
         const start = Date.now();
         const timeout = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error(TIMEOUT_MARKER)), SEND_TIMEOUT_MS)
         );
         Promise.race([pubs[i], timeout])
-          .then(() => updateRelayStatus(rumorId, relay, "sent", undefined, Date.now() - start))
+          .then(() => updateRelayStatus(rumorId, r, "sent", undefined, Date.now() - start))
           .catch((err: unknown) => {
             const isTimeout = err instanceof Error && err.message === TIMEOUT_MARKER;
             const reason = !isTimeout && err instanceof Error ? err.message : undefined;
-            updateRelayStatus(rumorId, relay, isTimeout ? "timeout" : "failed", reason, Date.now() - start);
+            updateRelayStatus(rumorId, r, isTimeout ? "timeout" : "failed", reason, Date.now() - start);
           });
       });
     });
@@ -305,7 +314,7 @@ const ChatView: React.FC = () => {
               onLongPress={setContextMenuMsg}
               onReact={handleReaction}
               onSwipeReply={setReplyTo}
-              onRetry={() => handleRetry(msg.id)}
+              onRetry={(relay) => handleRetry(msg.id, relay)}
             />
           );
         })}

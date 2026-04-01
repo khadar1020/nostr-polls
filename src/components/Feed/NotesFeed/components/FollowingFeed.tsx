@@ -88,6 +88,7 @@ const FollowingFeed = ({
       <UnifiedFeed
         data={mergedNotes}
         loading={loadingMore && mergedNotes.length === 0}
+        loadingMore={loadingMore && mergedNotes.length > 0}
         followOutput={false}
         onEndReached={fetchNotes}
         onRefreshNewer={checkForNewer}

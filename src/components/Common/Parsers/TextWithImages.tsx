@@ -199,6 +199,7 @@ const LightningInvoiceParser = ({
   part: string;
   index: number;
 }) => {
+  const theme = useTheme();
   const lower = part.toLowerCase();
   const isBolt11 = lower.startsWith("lnbc") || lower.startsWith("lntb");
   const isLnurl = lower.startsWith("lnurl");
@@ -226,14 +227,14 @@ const LightningInvoiceParser = ({
         display: "inline-flex",
         alignItems: "center",
         gap: 0.75,
-        border: "1px solid #FAD13F",
+        border: `1px solid ${theme.palette.primary.main}`,
         borderRadius: 1,
         px: 1.5,
         py: 0.5,
         my: 0.5,
       }}
     >
-      <BoltIcon sx={{ color: "#FAD13F", fontSize: 18 }} />
+      <BoltIcon sx={{ color: theme.palette.primary.main, fontSize: 18 }} />
       <Typography variant="body2" sx={{ fontWeight: 500 }}>
         {amountText}
       </Typography>
@@ -272,6 +273,7 @@ const NostrParser = ({
   profiles: Map<string, any> | undefined;
   fetchUserProfileThrottled: (pubkey: string) => void;
 }) => {
+  const theme = useTheme();
   const isNostrUri = part.startsWith("nostr:");
   const isBareNip19 = NIP19_BARE_PREFIXES.some((p) => part.startsWith(p));
   if (!isNostrUri && !isBareNip19) return null;
@@ -328,7 +330,7 @@ const NostrParser = ({
           <Link
             to={`/profile/${encoded}`}
             style={{
-              color: "#FAD13F",
+              color: theme.palette.primary.main,
               textDecoration: "underline",
               display: "inline-flex",
               alignItems: "center",

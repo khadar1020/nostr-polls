@@ -147,7 +147,8 @@ export const PublishDiagnosticModal: React.FC<PublishDiagnosticModalProps> = ({
   };
 
   const accepted = currentEntries.filter((e) => e.status === "accepted" || e.status === "sent").length;
-  const failed = currentEntries.filter((e) => e.status === "rejected" || e.status === "failed").length;
+  const rejected = currentEntries.filter((e) => e.status === "rejected").length;
+  const connFailed = currentEntries.filter((e) => e.status === "failed").length;
   const timedOut = currentEntries.filter((e) => e.status === "timeout").length;
   const retryable = currentEntries.filter((e) => e.status !== "accepted" && e.status !== "sent").length;
 
@@ -159,7 +160,8 @@ export const PublishDiagnosticModal: React.FC<PublishDiagnosticModalProps> = ({
           <Box sx={{ display: "flex", gap: 0.5 }}>
             {accepted > 0 && <Chip label={`${accepted} accepted`} size="small" color="success" />}
             {timedOut > 0 && <Chip label={`${timedOut} timeout`} size="small" color="warning" />}
-            {failed > 0 && <Chip label={`${failed} rejected`} size="small" color="error" />}
+            {rejected > 0 && <Chip label={`${rejected} rejected`} size="small" color="error" />}
+            {connFailed > 0 && <Chip label={`${connFailed} failed`} size="small" color="error" />}
           </Box>
         </Box>
       </DialogTitle>
@@ -294,9 +296,14 @@ export const PublishDiagnosticModal: React.FC<PublishDiagnosticModalProps> = ({
             Timed out after 5 s — relay may be slow, unreachable, or the connection dropped.
           </Typography>
         )}
-        {failed > 0 && (
+        {rejected > 0 && (
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
             Rejected relays returned a negative OK response. The reason above is what the relay reported.
+          </Typography>
+        )}
+        {connFailed > 0 && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+            Connection failures indicate a network or WebSocket error. Try reconnecting in Settings.
           </Typography>
         )}
       </DialogContent>

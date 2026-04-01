@@ -97,10 +97,15 @@ const ReviewCard: React.FC<Props> = ({ event }) => {
       }
 
       // Check for 'e' tag (event reference - could be poll or note)
-      const eTag = event.tags.find((t) => t[0] === "e")?.[1];
+      const eTagEntry = event.tags.find((t) => t[0] === "e");
+      const eTag = eTagEntry?.[1];
       if (eTag) {
         try {
-          const eventData = await nostrRuntime.fetchBatched(relays, eTag);
+          const relayHint = eTagEntry?.[2];
+          const fetchRelays = relayHint
+            ? Array.from(new Set([...relays, relayHint]))
+            : relays;
+          const eventData = await nostrRuntime.fetchBatched(fetchRelays, eTag);
           if (eventData) {
             if (eventData.kind === 1068) {
               // Poll

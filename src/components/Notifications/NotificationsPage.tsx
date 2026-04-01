@@ -39,7 +39,7 @@ const NotificationsPage: React.FC = () => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resolvePostContent = useCallback(
-    (postId: string) => {
+    (postId: string, relayHint?: string) => {
       if (postSnippets.has(postId) || fetchingRef.current.has(postId)) return;
       fetchingRef.current.add(postId);
 
@@ -54,7 +54,10 @@ const NotificationsPage: React.FC = () => {
         return;
       }
 
-      nostrRuntime.fetchBatched(relays, postId).then((event) => {
+      const fetchRelays = relayHint
+        ? Array.from(new Set([...relays, relayHint]))
+        : relays;
+      nostrRuntime.fetchBatched(fetchRelays, postId).then((event) => {
         if (event) {
           setPostSnippets((prev) => {
             const next = new Map(prev);
@@ -72,7 +75,9 @@ const NotificationsPage: React.FC = () => {
     notifications.forEach((ev) => {
       const parsed = parseNotification(ev);
       if ((parsed.type === "reaction" || parsed.type === "zap") && parsed.postId) {
-        resolvePostContent(parsed.postId);
+        // Pass relay hint from the e tag (index 2) if present
+        const relayHint = ev.tags.find(t => t[0] === 'e' && t[1] === parsed.postId)?.[2];
+        resolvePostContent(parsed.postId, relayHint);
       }
     });
   }, [notifications, resolvePostContent]);

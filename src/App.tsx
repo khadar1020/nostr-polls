@@ -1,5 +1,5 @@
 // App.tsx
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import {
   BrowserRouter as Router,
   Route,
@@ -35,15 +35,17 @@ import { ReportsProvider } from "./contexts/reports-context";
 import { TranslationBatchProvider } from "./contexts/translation-batch-context";
 import { FeedScrollProvider } from "./contexts/FeedScrollContext";
 import { SubNavProvider } from "./contexts/SubNavContext";
+import { AppearanceProvider, useAppearance } from "./contexts/AppearanceContext";
 import NavSidebar from "./components/SidePane";
 import { VideoPlayerProvider } from "./contexts/VideoPlayerContext";
 import { FloatingVideoPlayer } from "./components/Common/FloatingVideoPlayer";
 import { useAndroidNotifications } from "./hooks/useAndroidNotifications";
 
 import CssBaseline from "@mui/material/CssBaseline";
-import { ThemeProvider, Box, Fab } from "@mui/material";
+import { ThemeProvider, Box, Fab, useMediaQuery } from "@mui/material";
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
-import { baseTheme } from "./styles/theme";
+import { buildTheme } from "./styles/theme";
+import { getFontPreset, getColorPreset } from "./styles/themes";
 
 import EventList from "./components/Feed/FeedsLayout";
 import NotesFeed from "./components/Feed/NotesFeed/components";
@@ -73,11 +75,36 @@ function AndroidNotifications() {
   return null;
 }
 
+// Reads appearance context and provides a dynamically built MUI theme
+function DynamicThemeWrapper({ children }: { children: React.ReactNode }) {
+  const { fontPresetId, colorPresetId } = useAppearance();
+  const fontPreset = getFontPreset(fontPresetId);
+  const colorPreset = getColorPreset(colorPresetId);
+  const theme = useMemo(
+    () => buildTheme(
+      fontPreset.fontFamily,
+      colorPreset.lightPrimary,
+      colorPreset.darkPrimary,
+      colorPreset.lightBg,
+      colorPreset.darkBg,
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fontPreset.id, colorPreset.id],
+  );
+  return (
+    <ThemeProvider theme={theme} modeStorageKey="pollerama-color-scheme">
+      {children}
+    </ThemeProvider>
+  );
+}
+
 // Inner component: static layout — header on top, sidebar + content below
 function AppContent() {
   const [sidebarOpen, setSidebarOpen] = React.useState(
     () => localStorage.getItem("pollerama:sidebarOpen") !== "false"
   );
+  const isDesktop = useMediaQuery("(min-width:900px)");
+
   const toggleSidebar = () =>
     setSidebarOpen((prev) => {
       localStorage.setItem("pollerama:sidebarOpen", String(!prev));
@@ -94,7 +121,7 @@ function AppContent() {
       <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex" }}>
         <NavSidebar open={sidebarOpen} onToggle={toggleSidebar} />
         <Box sx={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-          {!sidebarOpen && (
+          {!sidebarOpen && isDesktop && (
             <Fab
               size="small"
               onClick={toggleSidebar}
@@ -216,56 +243,56 @@ const App: React.FC = () => {
 
   return (
     <NotificationProvider>
-      <ThemeProvider
-        theme={baseTheme}
-        modeStorageKey={"pollerama-color-scheme"}
-      >
-        <AppContextProvider>
-          <UserProvider>
-            <RelayProvider>
-              <RelayHealthProvider>
-              <GossipProvider>
-              <DMProvider>
-              <NostrNotificationsProvider>
-                <TranslationBatchProvider>
-                  <ListProvider>
-                    <RatingProvider>
-                      <ReportsProvider>
-                      <CssBaseline />
-                      <MetadataProvider>
-                        <VideoPlayerProvider>
-                          <Router>
-                            <AndroidNotifications />
-                            <FeedScrollProvider>
-                              <SubNavProvider>
-                                <AppContent />
-                              </SubNavProvider>
-                            </FeedScrollProvider>
-                            <FloatingVideoPlayer />
-                          </Router>
-                        </VideoPlayerProvider>
-                      </MetadataProvider>
-                      </ReportsProvider>
-                    </RatingProvider>
-                  </ListProvider>
-                </TranslationBatchProvider>
-              </NostrNotificationsProvider>
-              </DMProvider>
-              </GossipProvider>
-              </RelayHealthProvider>
-            </RelayProvider>
-          </UserProvider>
-        </AppContextProvider>
-      </ThemeProvider>
+      <AppearanceProvider>
+        <DynamicThemeWrapper>
+          <AppContextProvider>
+            <UserProvider>
+              <RelayProvider>
+                <RelayHealthProvider>
+                <GossipProvider>
+                <DMProvider>
+                <NostrNotificationsProvider>
+                  <TranslationBatchProvider>
+                    <ListProvider>
+                      <RatingProvider>
+                        <ReportsProvider>
+                        <CssBaseline />
+                        <MetadataProvider>
+                          <VideoPlayerProvider>
+                            <Router>
+                              <AndroidNotifications />
+                              <FeedScrollProvider>
+                                <SubNavProvider>
+                                  <AppContent />
+                                </SubNavProvider>
+                              </FeedScrollProvider>
+                              <FloatingVideoPlayer />
+                            </Router>
+                          </VideoPlayerProvider>
+                        </MetadataProvider>
+                        </ReportsProvider>
+                      </RatingProvider>
+                    </ListProvider>
+                  </TranslationBatchProvider>
+                </NostrNotificationsProvider>
+                </DMProvider>
+                </GossipProvider>
+                </RelayHealthProvider>
+              </RelayProvider>
+            </UserProvider>
+          </AppContextProvider>
+        </DynamicThemeWrapper>
+      </AppearanceProvider>
     </NotificationProvider>
   );
 };
 
 // Standalone pages need their own overflow-y:auto container because the global
 // layout locks html/body overflow so Virtuoso can be the sole scroller on feeds.
+// paddingBottom reserves space for the mobile bottom nav bar.
 function ScrollPage({ children }: { children: React.ReactNode }) {
   return (
-    <Box sx={{ height: "100%", overflowY: "auto" }}>
+    <Box sx={{ height: "100%", overflowY: "auto", pb: { xs: "56px", md: 0 } }}>
       {children}
     </Box>
   );

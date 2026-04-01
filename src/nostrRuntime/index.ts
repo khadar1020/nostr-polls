@@ -256,14 +256,13 @@ export class NostrRuntime {
     });
   }
 
-  private async _flushBatch() {
+  private _flushBatch() {
     const queue = this._batchQueue;
     this._batchQueue = [];
     this._batchTimer = null;
 
     if (queue.length === 0) return;
 
-    // Merge all relays and deduplicate IDs
     const allRelays = new Set<string>();
     const idToResolvers = new Map<string, ((event: Event | null) => void)[]>();
 
@@ -274,24 +273,39 @@ export class NostrRuntime {
     }
 
     const ids = Array.from(idToResolvers.keys());
+    // pending tracks IDs still waiting — resolved one-by-one as events arrive
+    const pending = new Map(idToResolvers);
+    let done = false;
 
-    try {
-      const events = await this.querySync(Array.from(allRelays), { ids });
-      const eventMap = new Map<string, Event>();
-      for (const event of events) {
-        eventMap.set(event.id, event);
+    const finish = () => {
+      if (done) return;
+      done = true;
+      // Resolve any IDs that never arrived with null
+      for (const resolvers of Array.from(pending.values())) {
+        resolvers.forEach(r => r(null));
       }
+      pending.clear();
+      handle.unsubscribe();
+    };
 
-      idToResolvers.forEach((resolvers, id) => {
-        const event = eventMap.get(id) || null;
-        resolvers.forEach((resolve) => resolve(event));
-      });
-    } catch (err) {
-      // Resolve all with null on error
-      idToResolvers.forEach((resolvers) => {
-        resolvers.forEach((resolve) => resolve(null));
-      });
-    }
+    // fetchBatched filters out cached IDs before queueing, so onEvent here
+    // is always called asynchronously (no sync cache delivery to worry about).
+    const handle = this.subscribe(
+      Array.from(allRelays),
+      [{ ids }],
+      {
+        onEvent: (event) => {
+          const resolvers = pending.get(event.id);
+          if (!resolvers) return;
+          pending.delete(event.id);
+          resolvers.forEach(r => r(event));
+        },
+        onEose: finish,
+      }
+    );
+
+    // Fallback: resolve remaining with null after 2.5 s
+    setTimeout(finish, 2500);
   }
 
   /**
