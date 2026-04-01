@@ -1,3 +1,7 @@
+# 1.7.0
+- Chose your own Fonts and Colors!
+- Fixes slowness in loading poll results
+
 # 1.6.1
 
 - Websocket cleanup for mobile devices
