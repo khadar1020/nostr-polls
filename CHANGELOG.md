@@ -1,3 +1,9 @@
+# 1.7.2
+- Notifications Cleanup: Filter user include, reposts , comments (1111)
+- Fixed Zaps
+- Added Unfollow
+- random UI colors for new users
+
 # 1.7.0
 - Chose your own Fonts and Colors!
 - Fixes slowness in loading poll results
