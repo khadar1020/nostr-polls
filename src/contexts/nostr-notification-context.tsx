@@ -77,6 +77,9 @@ export function NostrNotificationsProvider({
   // ────────────────────────────────────────────────────────────
   //
   const pushNotification = useCallback((event: Event) => {
+    // Don't notify about your own activity
+    if (event.pubkey === user?.pubkey) return;
+
     setNotifications((prev) => {
       if (prev.has(event.id)) return prev;
       const next = new Map(prev);
@@ -88,7 +91,7 @@ export function NostrNotificationsProvider({
     if (!lastSeenRef.current || event.created_at > lastSeenRef.current) {
       setUnreadCount((c) => c + 1);
     }
-  }, []); // stable — no deps needed because we read from ref
+  }, [user?.pubkey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   //
   // ────────────────────────────────────────────────────────────
@@ -128,36 +131,26 @@ export function NostrNotificationsProvider({
   //
   const buildFilters = (pubkey: string, since: number): Filter[] => {
     const pollIdArray = Array.from(pollMap.current.keys());
-
-    return [
-      // poll responses
+    const filters: Filter[] = [
+      // known notification kinds that tag the user:
+      // 1=note/reply, 6=repost, 7=reaction, 16=generic-repost,
+      // 1018=poll-vote (#p path for new votes), 1068=poll,
+      // 1111=NIP-22 comment, 9735=zap, 9802=highlight, 30023=article
       {
-        kinds: [1018],
-        since,
-        "#e": pollIdArray,
-      },
-
-      // notes that tag me
-      {
-        kinds: [1],
-        since,
-        "#p": [pubkey],
-      },
-
-      // reactions to me
-      {
-        kinds: [7],
-        since,
-        "#p": [pubkey],
-      },
-
-      // zaps to me
-      {
-        kinds: [9735],
+        kinds: [1, 6, 7, 16, 1018, 1068, 1111, 9735, 9802, 30023],
         since,
         "#p": [pubkey],
       },
     ];
+    // poll responses via #e (catches old votes that predate the #p tag)
+    if (pollIdArray.length > 0) {
+      filters.push({
+        kinds: [1018],
+        since,
+        "#e": pollIdArray,
+      });
+    }
+    return filters;
   };
 
   //
@@ -175,8 +168,9 @@ export function NostrNotificationsProvider({
     (async () => {
       // 1. load last seen — update ref first so pushNotification sees it immediately
       const stored = loadLastSeen(user.pubkey);
-      const since =
-        stored ?? Math.floor((Date.now() - DEFAULT_LOOKBACK_MS) / 1000);
+      // Always look back the full window so users can revisit old notifications.
+      // lastSeen only controls the unread badge, not what's fetched.
+      const since = Math.floor((Date.now() - DEFAULT_LOOKBACK_MS) / 1000);
 
       lastSeenRef.current = stored;
       setLastSeen(stored);

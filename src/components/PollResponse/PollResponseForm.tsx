@@ -240,7 +240,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
     const responseEvent = {
       kind: 1018,
       content: "",
-      tags: [["e", pollEvent.id], ...responses.map((r) => ["response", r])],
+      tags: [["e", pollEvent.id], ["p", pollEvent.pubkey], ...responses.map((r) => ["response", r])],
       created_at: Math.floor(Date.now() / 1000),
       pubkey: responseUser!.pubkey,
     };

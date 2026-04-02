@@ -16,6 +16,7 @@ interface ListContextInterface {
   selectedList: string | undefined;
   handleListSelected: (id: string | null) => void;
   fetchLatestContactList(): Promise<Event | null>;
+  unfollowContact(pubkeyToRemove: string): Promise<void>;
   myTopics: Set<string> | undefined;
   addTopicToMyTopics: (topic: string) => Promise<void>;
   removeTopicFromMyTopics: (topic: string) => Promise<void>;
@@ -558,6 +559,26 @@ export function ListProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const unfollowContact = async (pubkeyToRemove: string): Promise<void> => {
+    if (!user) return;
+    const contactEvent = await fetchLatestContactList();
+    const existingTags = contactEvent?.tags || [];
+    const updatedTags = existingTags.filter(([t, pk]) => !(t === "p" && pk === pubkeyToRemove));
+    const newEvent: EventTemplate = {
+      kind: 3,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: updatedTags,
+      content: contactEvent?.content || "",
+    };
+    const signer = await signerManager.getSigner();
+    const signed = await signer.signEvent(newEvent);
+    await Promise.allSettled(pool.publish(relays, signed));
+    setUser((prev) => {
+      if (!prev) return null;
+      return { ...prev, follows: (prev.follows || []).filter(pk => pk !== pubkeyToRemove) };
+    });
+  };
+
   return (
     <>
       {isFetchingWoT && (
@@ -571,6 +592,7 @@ export function ListProvider({ children }: { children: ReactNode }) {
           selectedList,
           handleListSelected,
           fetchLatestContactList,
+          unfollowContact,
           myTopics,
           addTopicToMyTopics,
           removeTopicFromMyTopics,

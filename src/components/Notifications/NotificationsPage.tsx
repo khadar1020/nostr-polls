@@ -9,6 +9,9 @@ import {
   Avatar,
   Divider,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate } from "react-router-dom";
@@ -31,6 +34,7 @@ const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [postSnippets, setPostSnippets] = useState<Map<string, string>>(new Map());
+  const [rawJsonEvent, setRawJsonEvent] = useState<Event | null>(null);
   const fetchingRef = useRef<Set<string>>(new Set());
 
   // Mark all as read when the page mounts
@@ -74,8 +78,7 @@ const NotificationsPage: React.FC = () => {
   useEffect(() => {
     notifications.forEach((ev) => {
       const parsed = parseNotification(ev);
-      if ((parsed.type === "reaction" || parsed.type === "zap") && parsed.postId) {
-        // Pass relay hint from the e tag (index 2) if present
+      if ((parsed.type === "reaction" || parsed.type === "zap" || parsed.type === "repost" || parsed.type === "highlight") && parsed.postId) {
         const relayHint = ev.tags.find(t => t[0] === 'e' && t[1] === parsed.postId)?.[2];
         resolvePostContent(parsed.postId, relayHint);
       }
@@ -122,11 +125,16 @@ const NotificationsPage: React.FC = () => {
             ? `"${pollMap.get(parsed.pollId!)?.content.slice(0, 80)}"`
             : "",
         };
-      case "comment":
+      case "comment": {
+        const commentTitle =
+          ev.kind === 1068 ? `${name} mentioned you in a poll` :
+          ev.kind === 30023 ? `${name} mentioned you in an article` :
+          `${name} commented`;
         return {
-          title: `${name} commented`,
+          title: commentTitle,
           body: parsed.content ? `"${parsed.content.slice(0, 80)}"` : "",
         };
+      }
       case "reaction":
         return {
           title: `${name} reacted ${parsed.reaction}`,
@@ -139,8 +147,18 @@ const NotificationsPage: React.FC = () => {
             ? `${parsed.sats} sats${parsed.postId ? ` · ${getPostSnippet(parsed.postId)}` : ""}`
             : "",
         };
+      case "repost":
+        return {
+          title: `${name} reposted you`,
+          body: parsed.postId ? getPostSnippet(parsed.postId) : "",
+        };
+      case "highlight":
+        return {
+          title: `${name} highlighted your post`,
+          body: parsed.content ? `"${parsed.content.slice(0, 80)}"` : "",
+        };
       default:
-        return { title: "New activity", body: ev.content?.slice(0, 80) || "" };
+        return { title: `Unknown event type (kind ${ev.kind})`, body: ev.content?.slice(0, 80) || "" };
     }
   };
 
@@ -151,8 +169,25 @@ const NotificationsPage: React.FC = () => {
       navigate(`/respond/${nip19.neventEncode({ id: parsed.pollId })}`);
       return;
     }
+    // For comments, navigate to the comment event itself — it's already in the
+    // EventStore since it was fetched as a notification, so PrepareNote finds it immediately.
+    if (parsed.type === "comment") {
+      navigate(`/note/${nip19.neventEncode({ id: ev.id })}`);
+      return;
+    }
     if (parsed.postId) {
-      navigate(`/note/${nip19.neventEncode({ id: parsed.postId })}`);
+      // Pass relay hint from the "e" tag so PrepareNote can find the event even
+      // if it isn't on the user's default relays.
+      const eTag = ev.tags.find(t => t[0] === 'e' && t[1] === parsed.postId);
+      const relayHint = eTag?.[2];
+      navigate(`/note/${nip19.neventEncode({
+        id: parsed.postId,
+        ...(relayHint ? { relays: [relayHint] } : {}),
+      })}`);
+      return;
+    }
+    if (parsed.type === "unknown") {
+      setRawJsonEvent(ev);
       return;
     }
     if (parsed.fromPubkey) {
@@ -241,6 +276,17 @@ const NotificationsPage: React.FC = () => {
           </List>
         )}
       </Box>
+      <Dialog open={Boolean(rawJsonEvent)} onClose={() => setRawJsonEvent(null)} maxWidth="md" fullWidth>
+        <DialogTitle>Raw event (kind {rawJsonEvent?.kind})</DialogTitle>
+        <DialogContent>
+          <Box
+            component="pre"
+            sx={{ m: 0, fontSize: "0.72rem", overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all" }}
+          >
+            {rawJsonEvent ? JSON.stringify(rawJsonEvent, null, 2) : ""}
+          </Box>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };

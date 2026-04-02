@@ -90,9 +90,8 @@ const Zap: React.FC<ZapProps> = ({ pollEvent }) => {
         comment: "",
         relays: relays,
       });
-      const serializedZapEvent = encodeURI(
-        JSON.stringify(signEvent(zapRequestEvent, user!.privateKey))
-      );
+      const signedZapRequest = await signEvent(zapRequestEvent, user!.privateKey);
+      const serializedZapEvent = encodeURIComponent(JSON.stringify(signedZapRequest));
       const zapEndpoint = await nip57.getZapEndpoint(recipient.event);
       const zaprequestUrl =
         zapEndpoint + `?amount=${amount * 1000}&nostr=${serializedZapEvent}`;

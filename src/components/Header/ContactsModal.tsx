@@ -16,12 +16,9 @@ import CloseIcon from "@mui/icons-material/Close";
 import { useUserContext } from "../../hooks/useUserContext";
 import { useAppContext } from "../../hooks/useAppContext";
 import { useListContext } from "../../hooks/useListContext";
-import { useRelays } from "../../hooks/useRelays";
 import { DEFAULT_IMAGE_URL } from "../../utils/constants";
-import { EventTemplate, nip19 } from "nostr-tools";
+import { nip19 } from "nostr-tools";
 import { useNavigate } from "react-router-dom";
-import { signEvent } from "../../nostr";
-import { pool } from "../../singletons";
 import { Nip05Badge } from "../Common/Nip05Badge";
 import { useBackClose } from "../../hooks/useBackClose";
 
@@ -34,10 +31,9 @@ export const ContactsModal: React.FC<ContactsModalProps> = ({
   open,
   onClose,
 }) => {
-  const { user, setUser } = useUserContext();
+  const { user } = useUserContext();
   const { profiles, fetchUserProfileThrottled } = useAppContext();
-  const { fetchLatestContactList } = useListContext();
-  const { relays } = useRelays();
+  const { unfollowContact } = useListContext();
   const navigate = useNavigate();
   useBackClose(open, onClose);
   const [loading, setLoading] = useState(true);
@@ -63,34 +59,9 @@ export const ContactsModal: React.FC<ContactsModalProps> = ({
   };
 
   const handleUnfollow = async (pubkeyToRemove: string) => {
-    if (!user) return;
-
     setUnfollowingPubkey(pubkeyToRemove);
-
     try {
-      const contactEvent = await fetchLatestContactList();
-      const existingTags = contactEvent?.tags || [];
-      const updatedTags = existingTags.filter(
-        ([t, pk]) => !(t === "p" && pk === pubkeyToRemove)
-      );
-
-      const newEvent: EventTemplate = {
-        kind: 3,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: updatedTags,
-        content: contactEvent?.content || "",
-      };
-
-      const signed = await signEvent(newEvent);
-      pool.publish(relays, signed);
-
-      const updatedFollows = (user.follows || []).filter(
-        (pk) => pk !== pubkeyToRemove
-      );
-      setUser({
-        ...user,
-        follows: updatedFollows,
-      });
+      await unfollowContact(pubkeyToRemove);
     } catch (error) {
       console.error("Failed to unfollow:", error);
     } finally {

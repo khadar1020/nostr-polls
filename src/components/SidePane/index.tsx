@@ -1,12 +1,9 @@
 import React, { useState } from "react";
 import {
-  BottomNavigation,
-  BottomNavigationAction,
   Box,
   IconButton,
   Menu,
   MenuItem,
-  Paper,
   Tooltip,
   Typography,
   useMediaQuery,
@@ -134,53 +131,70 @@ const NavSidebar: React.FC<NavSidebarProps> = ({ open, onToggle }) => {
     setMenuFeed(null);
   };
 
-  // ── Mobile: fixed bottom navigation bar ──────────────────────────────────
+  // ── Mobile: narrow icon sidebar with icons at the bottom ─────────────────
   if (!isDesktop) {
     return (
       <>
-        {/* Spacer so content doesn't render behind the fixed bottom nav */}
-        <Box sx={{ display: "none" }} />
-
-        <Paper
-          elevation={3}
+        <Box
           sx={{
-            position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            zIndex: theme.zIndex.appBar,
+            width: open ? 52 : 0,
+            flexShrink: 0,
+            height: "100%",
+            borderRight: open ? `1px solid ${theme.palette.divider}` : "none",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            py: 1,
+            overflowX: "hidden",
+            overflowY: "auto",
+            transition: "width 0.2s ease",
           }}
         >
-          <BottomNavigation
-            value={currentFeed}
-            showLabels
-            sx={{ height: 56 }}
-          >
-            {feedOptions.map(({ value, label, Icon }) => (
-              <BottomNavigationAction
-                key={value}
-                label={label}
-                value={value}
-                icon={<Icon />}
-                onClick={(e) => handleFeedClick(e, value)}
-                sx={{
-                  minWidth: 0,
-                  "& .MuiBottomNavigationAction-label": {
-                    fontSize: "0.65rem",
-                  },
-                }}
-              />
-            ))}
-          </BottomNavigation>
-        </Paper>
+          {/* Spacer pushes icons to the bottom */}
+          <Box sx={{ flex: 1 }} />
 
-        {/* Sub-items popup — anchored above the tapped nav action */}
+          {feedOptions.map(({ value, label, Icon }) => {
+            const active = currentFeed === value;
+            return (
+              <Tooltip key={value} title={label} placement="right">
+                <IconButton
+                  onClick={(e) => handleFeedClick(e, value)}
+                  size="small"
+                  sx={{
+                    mb: 0.5,
+                    color: active ? "primary.main" : "text.secondary",
+                    bgcolor: active
+                      ? alpha(theme.palette.primary.main, 0.12)
+                      : "transparent",
+                    borderRadius: 2,
+                    "&:hover": {
+                      bgcolor: active
+                        ? alpha(theme.palette.primary.main, 0.18)
+                        : alpha(theme.palette.text.primary, 0.06),
+                    },
+                  }}
+                >
+                  <Icon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            );
+          })}
+
+          {/* Close button — pinned to bottom */}
+          <Tooltip title="Hide sidebar" placement="right">
+            <IconButton size="small" onClick={onToggle} sx={{ mt: 0.5 }}>
+              <ChevronLeftIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        {/* Sub-items popup — anchored to the right of the icon */}
         <Menu
           anchorEl={menuAnchor}
           open={Boolean(menuAnchor)}
           onClose={() => { setMenuAnchor(null); setMenuFeed(null); }}
-          anchorOrigin={{ vertical: "top", horizontal: "center" }}
-          transformOrigin={{ vertical: "bottom", horizontal: "center" }}
+          anchorOrigin={{ vertical: "center", horizontal: "right" }}
+          transformOrigin={{ vertical: "center", horizontal: "left" }}
           slotProps={{ paper: { sx: { minWidth: 180 } } }}
         >
           {menuFeed &&

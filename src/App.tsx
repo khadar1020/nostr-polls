@@ -42,7 +42,7 @@ import { FloatingVideoPlayer } from "./components/Common/FloatingVideoPlayer";
 import { useAndroidNotifications } from "./hooks/useAndroidNotifications";
 
 import CssBaseline from "@mui/material/CssBaseline";
-import { ThemeProvider, Box, Fab, useMediaQuery } from "@mui/material";
+import { ThemeProvider, Box, Fab } from "@mui/material";
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import { buildTheme } from "./styles/theme";
 import { getFontPreset, getColorPreset } from "./styles/themes";
@@ -103,8 +103,6 @@ function AppContent() {
   const [sidebarOpen, setSidebarOpen] = React.useState(
     () => localStorage.getItem("pollerama:sidebarOpen") !== "false"
   );
-  const isDesktop = useMediaQuery("(min-width:900px)");
-
   const toggleSidebar = () =>
     setSidebarOpen((prev) => {
       localStorage.setItem("pollerama:sidebarOpen", String(!prev));
@@ -121,7 +119,7 @@ function AppContent() {
       <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex" }}>
         <NavSidebar open={sidebarOpen} onToggle={toggleSidebar} />
         <Box sx={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-          {!sidebarOpen && isDesktop && (
+          {!sidebarOpen && (
             <Fab
               size="small"
               onClick={toggleSidebar}

@@ -1,7 +1,7 @@
 import { Event, nip57 } from "nostr-tools";
 
 export type ParsedNotification = {
-  type: "poll-response" | "comment" | "reaction" | "zap" | "unknown";
+  type: "poll-response" | "comment" | "reaction" | "zap" | "repost" | "highlight" | "unknown";
   pollId?: string;
   postId?: string;
   fromPubkey: string | null;
@@ -26,23 +26,69 @@ export function parseNotification(ev: Event): ParsedNotification {
     };
   }
 
-  // COMMENT
-  if (ev.kind === 1 && getTag("p")) {
+  // Helper: pick the most specific "e" tag (reply > last non-root > last)
+  const pickETag = (tagName = 'e') => {
+    const eTags = ev.tags.filter(t => t[0] === tagName);
+    return (
+      eTags.find(t => t[3] === 'reply') ??
+      eTags.filter(t => t[3] !== 'root' && t[3] !== 'mention').pop() ??
+      eTags[eTags.length - 1]
+    );
+  };
+
+  // COMMENT — kind 1 reply or kind 1111 NIP-22 generic comment
+  if ((ev.kind === 1 || ev.kind === 1111) && getTag("p")) {
+    // For NIP-22 (1111), root/reply use uppercase E/e tags
+    const postTag = ev.kind === 1111
+      ? (pickETag('e') ?? pickETag('E'))
+      : pickETag('e');
     return {
       type: "comment",
       fromPubkey,
-      postId: getTag("e") ?? undefined,
+      postId: postTag?.[1] ?? undefined,
       content: ev.content,
+    };
+  }
+
+  // REPOST — kind 6 (note repost) or kind 16 (generic repost)
+  if (ev.kind === 6 || ev.kind === 16) {
+    const postTag = pickETag('e');
+    return {
+      type: "repost",
+      fromPubkey,
+      postId: postTag?.[1] ?? undefined,
     };
   }
 
   // REACTION
   if (ev.kind === 7) {
+    // Use the last "e" tag (the specific event being reacted to), not the first (thread root)
+    const postTag = pickETag('e');
     return {
       type: "reaction",
       fromPubkey,
-      postId: getTag("e") ?? undefined,
+      postId: postTag?.[1] ?? undefined,
       reaction: ev.content,
+    };
+  }
+
+  // HIGHLIGHT — kind 9802 (NIP-84): someone highlighted text from one of your posts
+  if (ev.kind === 9802) {
+    const postTag = pickETag('e');
+    return {
+      type: "highlight",
+      fromPubkey,
+      postId: postTag?.[1] ?? undefined,
+      content: ev.content, // the highlighted text
+    };
+  }
+
+  // POLL (kind 1068) or ARTICLE (kind 30023) tagging the user — treat as a mention/comment
+  if (ev.kind === 1068 || ev.kind === 30023) {
+    return {
+      type: "comment",
+      fromPubkey,
+      content: ev.content,
     };
   }
 

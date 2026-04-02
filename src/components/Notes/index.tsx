@@ -71,7 +71,7 @@ export const Notes: React.FC<NotesProps> = ({
   const { profiles, fetchUserProfileThrottled, aiSettings } = useAppContext();
   let { user, requestLogin, setUser } = useUserContext();
   let { relays, writeRelays } = useRelays();
-  let { fetchLatestContactList } = useListContext();
+  let { fetchLatestContactList, unfollowContact } = useListContext();
   const replyingTo = event.tags.findLast((t) => t[0] === "e")?.[1] || null;
   const isValidHex = (s: string | null) => s && s.length === 64 && /^[0-9a-f]+$/i.test(s);
   const replyingToNevent = replyingTo && isValidHex(replyingTo)
@@ -511,6 +511,11 @@ export const Notes: React.FC<NotesProps> = ({
               </MenuItem>
             )}
             {extras}
+            {user && user.follows?.includes(event.pubkey) && (
+              <MenuItem onClick={() => { unfollowContact(event.pubkey); handleCloseMenu(); }}>
+                Unfollow
+              </MenuItem>
+            )}
           </Menu>
 
           <Snackbar
