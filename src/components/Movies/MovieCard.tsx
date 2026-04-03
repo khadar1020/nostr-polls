@@ -33,6 +33,8 @@ interface FallbackMovieData {
   summary?: string;
 }
 
+const fallbackMovieCache = new Map<string, FallbackMovieData>();
+
 const MovieCard: React.FC<MovieCardProps> = ({ imdbId, metadataEvent }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [relayModalOpen, setRelayModalOpen] = useState(false);
@@ -69,16 +71,11 @@ const MovieCard: React.FC<MovieCardProps> = ({ imdbId, metadataEvent }) => {
       return;
     }
 
-    const cacheKey = `movie-fallback:${imdbId}`;
-    const cached = localStorage.getItem(cacheKey);
+    const cached = fallbackMovieCache.get(imdbId);
 
     if (cached) {
-      try {
-        setFallbackData(JSON.parse(cached));
-        return;
-      } catch {
-        localStorage.removeItem(cacheKey);
-      }
+      setFallbackData(cached);
+      return;
     }
 
     let cancelled = false;
@@ -108,7 +105,7 @@ const MovieCard: React.FC<MovieCardProps> = ({ imdbId, metadataEvent }) => {
           year: result.year?.value?.slice(0, 4),
         };
 
-        localStorage.setItem(cacheKey, JSON.stringify(fallback));
+        fallbackMovieCache.set(imdbId, fallback);
         setFallbackData(fallback);
       } catch (err) {
         console.error("Fallback metadata failed", imdbId, err);
