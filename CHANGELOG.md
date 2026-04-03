@@ -1,3 +1,7 @@
+# 1.7.3
+- Fix movie feed
+- Add wikidata as fallback for movie metadata.
+
 # 1.7.2
 - Notifications Cleanup: Filter user include, reposts , comments (1111)
 - Fixed Zaps
