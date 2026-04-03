@@ -41,7 +41,6 @@ const MoviesFeed: React.FC = () => {
     const currentRelays = relaysRef.current;
     const currentCursor = cursorRef.current;
     const now = Math.floor(Date.now() / 1000);
-    const newIds: Set<string> = new Set();
     let oldestTimestamp: number | undefined;
 
     const filter: Filter = {
