@@ -6,9 +6,10 @@ import { useBackClose } from "../../hooks/useBackClose";
 interface RateMovieModalProps {
   open: boolean;
   onClose: () => void;
+  onRated?: (imdbId: string) => void;
 }
 
-const RateMovieModal: React.FC<RateMovieModalProps> = ({ open, onClose }) => {
+const RateMovieModal: React.FC<RateMovieModalProps> = ({ open, onClose, onRated }) => {
   const [imdbInput, setImdbInput] = useState("");
   const [selectedImdbId, setSelectedImdbId] = useState<string | null>(null);
   useBackClose(open, onClose);
@@ -20,6 +21,7 @@ const RateMovieModal: React.FC<RateMovieModalProps> = ({ open, onClose }) => {
   };
 
   const handleClose = () => {
+    if (selectedImdbId && onRated) onRated(selectedImdbId);
     setImdbInput("");
     setSelectedImdbId(null);
     onClose();

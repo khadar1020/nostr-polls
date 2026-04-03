@@ -14,11 +14,11 @@ const MetadataContext = createContext<MetadataContextValue | null>(null);
 
 export const MetadataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [metadata, setMetadata] = useState<Map<string, Event[]>>(new Map());
-  const registered = useRef<Set<string>>(new Set());
   const pending = useRef<Set<string>>(new Set());
   const entityMap = useRef<Map<string, string>>(new Map()); // dTag => id
   const { relays } = useRelays();
 
+  const loaded = useRef<Set<string>>(new Set());
   // Queue flushing effect
   useEffect(() => {
     const interval = setInterval(() => {
@@ -34,9 +34,11 @@ export const MetadataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       nostrRuntime.querySync(relays, filter).then((events: Event[]) => {
         const grouped = new Map<string, Event[]>();
+
         for (const event of events) {
-          const dTag = event.tags.find(([k, v]) => k === "d")?.[1];
+          const dTag = event.tags.find(([k]) => k === "d")?.[1];
           if (!dTag) continue;
+
           const id = entityMap.current.get(dTag);
           if (!id) continue;
 
@@ -46,11 +48,18 @@ export const MetadataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         setMetadata((prev) => {
           const next = new Map(prev);
+
           for (const [id, evs] of Array.from(grouped.entries())) {
             next.set(id, evs);
           }
+
           return next;
         });
+
+        // mark completed only after successful response
+        for (const tag of tags) {
+          loaded.current.add(tag);
+        }
       });
     }, 2000); // Debounce interval
 
@@ -59,9 +68,8 @@ export const MetadataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const registerEntity = (type: EntityType, id: string) => {
     const dTag = `${type}:${id}`;
-    if (registered.current.has(dTag)) return;
+    if (loaded.current.has(dTag) || pending.current.has(dTag)) return;
 
-    registered.current.add(dTag);
     pending.current.add(dTag);
     entityMap.current.set(dTag, id);
   };

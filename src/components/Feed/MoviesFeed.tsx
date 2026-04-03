@@ -6,9 +6,8 @@ import { nostrRuntime } from "../../singletons";
 import MovieCard from "../Movies/MovieCard";
 import RateMovieModal from "../Ratings/RateMovieModal";
 import { Card, CardContent, Typography, CircularProgress, Box, Button } from "@mui/material";
-import { useUserContext } from "../../hooks/useUserContext";
 
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 50;
 
 const MoviesFeed: React.FC = () => {
   const [movieIds, setMovieIds] = useState<Set<string>>(new Set());
@@ -16,15 +15,31 @@ const MoviesFeed: React.FC = () => {
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState<number | undefined>(undefined);
-  const { user } = useUserContext();
   const { relays } = useRelays();
   const seen = useRef<Set<string>>(new Set());
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Always reflect the latest relays inside fetchBatch without stale closures
+  const relaysRef = useRef<string[]>(relays);
+  const loadingRef = useRef(false);
+  const cursorRef = useRef<number | undefined>(undefined);
+
+  // Keep refs in sync
+  relaysRef.current = relays;
+  cursorRef.current = cursor;
 
   const fetchBatch = () => {
-    if (loading) return;
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
 
-    const currentCursor = cursor; // Capture cursor at start
+    // Cancel any in-flight timeout from a previous fetch
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    const currentRelays = relaysRef.current;
+    const currentCursor = cursorRef.current;
     const now = Math.floor(Date.now() / 1000);
     const newIds: Set<string> = new Set();
     let oldestTimestamp: number | undefined;
@@ -36,62 +51,77 @@ const MoviesFeed: React.FC = () => {
       until: currentCursor || now,
     };
 
-    if (user?.follows?.length) {
-      filter.authors = user.follows;
-    }
-
-    const handle = nostrRuntime.subscribe(relays, [filter], {
+    const handle = nostrRuntime.subscribe(currentRelays, [filter], {
       onEvent: (event) => {
+        console.log("event", event.id, event.created_at);
         const dTag = event.tags.find((t) => t[0] === "d");
         if (dTag && dTag[1].startsWith("movie:")) {
           const imdbId = dTag[1].split(":")[1];
+          console.log("movie found", imdbId);
           if (!seen.current.has(imdbId)) {
             seen.current.add(imdbId);
-            newIds.add(imdbId);
+
+            setMovieIds((prev) => {
+              const next = new Set(prev);
+              next.add(imdbId);
+              return next;
+            });
           }
         }
 
-        // Track oldest timestamp for next cursor
         if (!oldestTimestamp || event.created_at < oldestTimestamp) {
           oldestTimestamp = event.created_at;
         }
       },
-      onEose: () => {
-        setMovieIds(
-          (prev) => new Set([...Array.from(prev), ...Array.from(newIds)])
-        );
-
-        // Only update cursor if we got results
-        if (oldestTimestamp) {
-          setCursor(oldestTimestamp - 1);
-        }
-
-        setInitialLoadComplete(true);
-        setLoading(false);
-        handle.unsubscribe();
-      },
     });
 
-    setTimeout(() => {
-      setMovieIds(
-        (prev) => new Set([...Array.from(prev), ...Array.from(newIds)])
-      );
+    timeoutRef.current = setTimeout(() => {
+      timeoutRef.current = null;
+      handle.unsubscribe();
 
-      // Only update cursor if we got results
       if (oldestTimestamp) {
         setCursor(oldestTimestamp - 1);
+        cursorRef.current = oldestTimestamp - 1;
       }
 
       setInitialLoadComplete(true);
+      loadingRef.current = false;
       setLoading(false);
-      handle.unsubscribe();
     }, 3000);
   };
 
+  const handleRated = (imdbId: string) => {
+    if (!seen.current.has(imdbId)) {
+      seen.current.add(imdbId);
+      setMovieIds((prev) => new Set([imdbId, ...Array.from(prev)]));
+    }
+  };
+
+  // Re-fetch whenever the relay list changes (e.g. when user's relay list
+  // finishes loading after startup — RelayContext starts with defaultRelays
+  // and replaces them asynchronously).
   useEffect(() => {
+    // Cancel any in-flight fetch so the new relays take effect immediately
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    loadingRef.current = false;
+    console.log("relays changed", relays);
+    // Reset feed state so the new relay's events start fresh
+    seen.current.clear();
+    setMovieIds(new Set());
+    setCursor(undefined);
+    cursorRef.current = undefined;
+    setInitialLoadComplete(false);
+
     fetchBatch();
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [relays]);
 
   return (
     <Box sx={{ height: "100%", overflowY: "auto" }}>
@@ -114,7 +144,7 @@ const MoviesFeed: React.FC = () => {
         </Box>
       ) : (
         <Box>
-          <Typography style={{margin: 10, fontSize: 18}}>Recently Rated</Typography>
+          <Typography style={{ margin: 10, fontSize: 18 }}>Recently Rated</Typography>
           {Array.from(movieIds).map((id) => (
             <div key={id}>
               <MovieCard imdbId={id} />
@@ -136,7 +166,11 @@ const MoviesFeed: React.FC = () => {
         </Box>
       )}
 
-      <RateMovieModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <RateMovieModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onRated={handleRated}
+      />
     </Box>
   );
 };

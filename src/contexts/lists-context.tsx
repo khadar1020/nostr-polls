@@ -94,7 +94,6 @@ export function ListProvider({ children }: { children: ReactNode }) {
 
     setLists((prevMap) => {
       const pastEvent = prevMap?.get(a_tag);
-      console.log("Did it find past event", pastEvent);
 
       // Only update if this event is newer than what we have
       if (event.created_at > (pastEvent?.created_at || 0)) {

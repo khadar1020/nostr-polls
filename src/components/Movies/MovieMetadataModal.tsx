@@ -11,9 +11,12 @@ import {
 } from "@mui/material";
 import { signEvent } from "../../nostr";
 import { useRelays } from "../../hooks/useRelays";
-import { SimplePool, Event } from "nostr-tools";
+import { Event } from "nostr-tools";
 import MovieCard from "./MovieCard";
 import { useBackClose } from "../../hooks/useBackClose";
+import { waitForPublish } from "../../utils/publish";
+import { usePublishDiagnostic } from "../../hooks/usePublishDiagnostic";
+import { PublishDiagnosticModal } from "../Common/PublishDiagnosticModal";
 
 interface MovieMetadataModalProps {
   open: boolean;
@@ -33,6 +36,7 @@ const MovieMetadataModal: React.FC<MovieMetadataModalProps> = ({
   const [tab, setTab] = useState(0);
   const [previewEvent, setPreviewEvent] = useState<Event>();
   const { relays } = useRelays();
+  const { result, open: diagOpen, setOpen: setDiagOpen, title: diagTitle, openModal, retry } = usePublishDiagnostic();
   useBackClose(open, onClose);
 
   useEffect(() => {
@@ -76,9 +80,9 @@ const MovieMetadataModal: React.FC<MovieMetadataModalProps> = ({
     const signed = await signEvent(event);
     if (!signed) throw new Error("Signing failed");
 
-    const pool = new SimplePool();
-    pool.publish(relays, signed);
     onClose();
+    const publishResult = await waitForPublish(relays, signed);
+    openModal(signed, publishResult, "Movie metadata publish results");
   };
 
   const renderEditTab = () => (
@@ -143,32 +147,43 @@ const MovieMetadataModal: React.FC<MovieMetadataModalProps> = ({
   );
 
   return (
-    <Modal open={open} onClose={onClose}>
-      <Box
-        sx={{
-          p: 4,
-          bgcolor: "background.paper",
-          borderRadius: 2,
-          boxShadow: 24,
-          maxWidth: 600,
-          mx: "auto",
-          mt: "5%",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Typography variant="h6">Add Movie Metadata</Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
-          IMDb ID: <code>{imdbId}</code>
-        </Typography>
+    <>
+      <Modal open={open} onClose={onClose}>
+        <Box
+          sx={{
+            p: 4,
+            bgcolor: "background.paper",
+            borderRadius: 2,
+            boxShadow: 24,
+            maxWidth: 600,
+            mx: "auto",
+            mt: "5%",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Typography variant="h6">Add Movie Metadata</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
+            IMDb ID: <code>{imdbId}</code>
+          </Typography>
 
-        <Tabs value={tab} onChange={(_, val) => setTab(val)} sx={{ mb: 2 }}>
-          <Tab label="Edit" />
-          <Tab label="Preview" />
-        </Tabs>
+          <Tabs value={tab} onChange={(_, val) => setTab(val)} sx={{ mb: 2 }}>
+            <Tab label="Edit" />
+            <Tab label="Preview" />
+          </Tabs>
 
-        {tab === 0 ? renderEditTab() : renderPreviewTab()}
-      </Box>
-    </Modal>
+          {tab === 0 ? renderEditTab() : renderPreviewTab()}
+        </Box>
+      </Modal>
+      {result && (
+        <PublishDiagnosticModal
+          open={diagOpen}
+          onClose={() => setDiagOpen(false)}
+          title={diagTitle}
+          entries={result.relayResults}
+          onRetry={retry}
+        />
+      )}
+    </>
   );
 };
 

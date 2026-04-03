@@ -40,9 +40,11 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
   const [profilesVersion, setProfilesVersion] = useState(0);
   const [dataVersion, setDataVersion] = useState(0);
 
+
   // Debounce timers — coalesce rapid per-event bumps into a single re-render
   const profilesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dataTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const badProfileEvents = useRef<Set<string>>(new Set());
 
   const bumpProfilesVersion = useCallback(() => {
     if (profilesTimerRef.current) clearTimeout(profilesTimerRef.current);
@@ -99,11 +101,14 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     const profileMap = new Map<string, Profile>();
 
     for (const event of events) {
+      if (badProfileEvents.current.has(event.id)) continue;
+
       try {
         const content = JSON.parse(event.content);
         profileMap.set(event.pubkey, { ...content, event });
       } catch (e) {
-        console.error("Error parsing profile event", e);
+        badProfileEvents.current.add(event.id);
+        console.warn("Skipping malformed profile", event.pubkey);
       }
     }
 
