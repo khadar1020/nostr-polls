@@ -6,7 +6,7 @@ import { useVideoPlayer } from "../../contexts/VideoPlayerContext";
 import { YouTubePlayer } from "./Youtube";
 
 export const FloatingVideoPlayer: React.FC = () => {
-  const { floatingVideo, clearFloating } = useVideoPlayer();
+  const { floatingVideo, isPipMode, clearFloating } = useVideoPlayer();
   const containerRef = useRef<HTMLDivElement>(null);
   // Start bottom-right, above any potential bottom nav
   const [pos, setPos] = useState({ right: 16, bottom: 80 });
@@ -65,6 +65,43 @@ export const FloatingVideoPlayer: React.FC = () => {
   };
 
   if (!floatingVideo) return null;
+
+  // When the system has entered PiP mode, expand the video to fill the entire
+  // WebView so the PiP window shows only the video — no app chrome.
+  if (isPipMode) {
+    return (
+      <Box
+        sx={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 99999,
+          bgcolor: "#000",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {floatingVideo.type === "youtube" ? (
+          <YouTubePlayer
+            url={floatingVideo.url}
+            startTime={floatingVideo.startTime}
+            isFloating
+          />
+        ) : (
+          <video
+            key={floatingVideo.url}
+            src={floatingVideo.url}
+            autoPlay
+            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+            onLoadedMetadata={(e) => {
+              (e.currentTarget as HTMLVideoElement).currentTime =
+                floatingVideo.startTime;
+            }}
+          />
+        )}
+      </Box>
+    );
+  }
 
   return (
     <Paper

@@ -1,3 +1,6 @@
+# 1.7.4
+- Add System wide PIP.
+
 # 1.7.3
 - Fix movie feed
 - Add wikidata as fallback for movie metadata.

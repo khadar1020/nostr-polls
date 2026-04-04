@@ -2,7 +2,11 @@ package com.formstr.pollerama;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PictureInPictureParams;
+import android.content.res.Configuration;
+import android.os.Build;
 import android.os.Bundle;
+import android.util.Rational;
 import androidx.work.Constraints;
 import androidx.work.NetworkType;
 import androidx.work.PeriodicWorkRequest;
@@ -18,9 +22,37 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Must register before super.onCreate() so the Capacitor bridge
+        // includes the plugin when it initialises.
+        registerPlugin(PipPlugin.class);
         super.onCreate(savedInstanceState);
         createNotificationChannel();
         scheduleNotificationWorker();
+    }
+
+    // Android 8–11: fires when the user intentionally leaves (home button or
+    // recents → switches away). Android 12+ is handled by setAutoEnterEnabled.
+    @Override
+    public void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        if (PipPlugin.videoActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            PictureInPictureParams params = new PictureInPictureParams.Builder()
+                    .setAspectRatio(new Rational(16, 9))
+                    .build();
+            enterPictureInPictureMode(params);
+        }
+    }
+
+    // Tell the web layer when system PiP starts/ends so it can switch the
+    // floating player to/from full-screen layout.
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode,
+                                               Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        if (PipPlugin.instance != null) {
+            PipPlugin.instance.notifyPipChanged(isInPictureInPictureMode);
+        }
     }
 
     private void createNotificationChannel() {
