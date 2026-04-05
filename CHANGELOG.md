@@ -1,3 +1,7 @@
+# 1.7.7
+- Add a notification customizer while replying to threads.
+- Fix missing notifications and refresh notifications when visiting notif screen.
+
 # 1.7.6
 - Rating UI Uplifted
 - Fix App Search

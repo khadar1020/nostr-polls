@@ -28,7 +28,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 dayjs.extend(relativeTime);
 
 const NotificationsPage: React.FC = () => {
-  const { notifications, markAllAsRead, pollMap } = useNostrNotifications();
+  const { notifications, markAllAsRead, refresh, pollMap } = useNostrNotifications();
   const { profiles, fetchUserProfileThrottled } = useAppContext();
   const { relays } = useRelays();
   const navigate = useNavigate();
@@ -37,8 +37,9 @@ const NotificationsPage: React.FC = () => {
   const [rawJsonEvent, setRawJsonEvent] = useState<Event | null>(null);
   const fetchingRef = useRef<Set<string>>(new Set());
 
-  // Mark all as read when the page mounts
+  // Catch up on missed events and mark all as read when the page mounts
   useEffect(() => {
+    refresh();
     markAllAsRead();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

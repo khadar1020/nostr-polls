@@ -20,6 +20,7 @@ import ShareButton from "../Common/Share/ShareButton";
 interface FeedbackMenuProps {
   event: Event;
   depth?: number;
+  ancestorPubkeys?: string[];
 }
 
 const MAX_DEPTH = 2;
@@ -27,6 +28,7 @@ const MAX_DEPTH = 2;
 export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({
   event,
   depth = 0,
+  ancestorPubkeys = [],
 }) => {
   const [showComments, setShowComments] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -199,6 +201,8 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({
             >
               <CommentSection
                 eventId={event.id}
+                rootPubkey={event.pubkey}
+                ancestorPubkeys={ancestorPubkeys}
                 showComments={showComments}
                 depth={depth}
               />

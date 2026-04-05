@@ -5,6 +5,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  Chip,
   IconButton,
   Menu,
   MenuItem,
@@ -40,16 +41,52 @@ import { useReports } from "../../../hooks/useReports";
 import { ReportDialog } from "../../Report/ReportDialog";
 import { ReportReason } from "../../../contexts/reports-context";
 import { getAppBaseUrl } from "../../../utils/platform";
+import { Profile } from "../../../nostr/types";
+
+function dedup(arr: string[]): string[] {
+  const seen = new Set<string>();
+  return arr.filter((x) => (seen.has(x) ? false : (seen.add(x), true)));
+}
+
+// ── Removable "Notifying" chips shown beneath a comment input ────────────────
+const NotifyHint: React.FC<{
+  pubkeys: string[];
+  profiles: Map<string, Profile> | undefined;
+  onRemove: (pk: string) => void;
+}> = ({ pubkeys, profiles, onRemove }) => {
+  if (pubkeys.length === 0) return null;
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5, flexWrap: "wrap" }}>
+      <Typography variant="caption" color="text.secondary">
+        Notifying:
+      </Typography>
+      {pubkeys.map((pk) => {
+        const profile = profiles?.get(pk);
+        const name = profile?.name || nip19.npubEncode(pk).slice(0, 10) + "…";
+        return (
+          <Chip
+            key={pk}
+            size="small"
+            avatar={<Avatar src={profile?.picture || DEFAULT_IMAGE_URL} />}
+            label={name}
+            onDelete={() => onRemove(pk)}
+            sx={{ fontSize: "0.7rem", height: 22 }}
+          />
+        );
+      })}
+    </Box>
+  );
+};
 
 // ── Per-comment card with context menu ──────────────────────────────────────
 interface CommentCardProps {
   comment: Event;
   depth: number;
-  onReply: (id: string) => void;
+  commentAncestors: string[];
   children?: React.ReactNode;
 }
 
-const CommentCard: React.FC<CommentCardProps> = ({ comment, depth, onReply, children }) => {
+const CommentCard: React.FC<CommentCardProps> = ({ comment, depth, commentAncestors, children }) => {
   const { profiles, fetchUserProfileThrottled } = useAppContext();
   const { user } = useUserContext();
   const eventRelays = useEventRelays(comment.id);
@@ -100,7 +137,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, depth, onReply, chil
         </CardContent>
 
         <Box sx={{ px: 1, pb: 1 }}>
-          <FeedbackMenu event={comment} depth={depth + 1} />
+          <FeedbackMenu event={comment} depth={depth + 1} ancestorPubkeys={commentAncestors} />
         </Box>
 
         {children}
@@ -149,12 +186,16 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, depth, onReply, chil
 
 interface CommentSectionProps {
   eventId: string;
+  rootPubkey?: string;
+  ancestorPubkeys?: string[];
   showComments: boolean;
   depth?: number;
 }
 
 const CommentSection: React.FC<CommentSectionProps> = ({
   eventId,
+  rootPubkey,
+  ancestorPubkeys = [],
   showComments,
   depth = 0,
 }) => {
@@ -163,11 +204,13 @@ const CommentSection: React.FC<CommentSectionProps> = ({
     fetchCommentsThrottled,
     commentsMap,
     addEventToMap,
+    profiles,
   } = useAppContext();
 
   const [replyTo, setReplyTo] = useState<string | null>(null);
-  const [showReplies, setShowReplies] = useState<Map<string, boolean>>(
-    new Map()
+  const [showReplies, setShowReplies] = useState<Map<string, boolean>>(new Map());
+  const [topLevelNotify, setTopLevelNotify] = useState<string[]>(
+    dedup([...ancestorPubkeys, ...(rootPubkey ? [rootPubkey] : [])])
   );
   const { result: publishResult, open: diagnosticOpen, setOpen: setDiagnosticOpen, title: diagnosticTitle, openModal, retry } = usePublishDiagnostic();
 
@@ -203,17 +246,24 @@ const CommentSection: React.FC<CommentSectionProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSubmitComment = async (content: string, parentId?: string) => {
+  const handleSubmitComment = async (content: string, parentId?: string, notifyPubkeys: string[] = []) => {
     if (!user) {
       showNotification(NOTIFICATION_MESSAGES.LOGIN_TO_COMMENT, "warning");
       return;
     }
 
+    const mentionTags = extractMentionTags(content);
+    const mentionedPubkeys = new Set(mentionTags.map((t) => t[1]));
+    const pTags = notifyPubkeys
+      .filter((pk) => !mentionedPubkeys.has(pk))
+      .map((pk) => ["p", pk]);
+
     const commentEvent = {
       kind: 1,
       content: content,
       tags: [
-        ...extractMentionTags(content),
+        ...mentionTags,
+        ...pTags,
         ["e", eventId, "", "root"],
         ...(parentId ? [["e", parentId, "", "reply"]] : []),
       ],
@@ -235,7 +285,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
     setReplyTo(null);
   };
 
-  const renderComments = (comments: Event[], parentId: string | null) => {
+  const renderComments = (comments: Event[], parentId: string | null, accumulatedAncestors: string[]) => {
     return comments
       .filter((comment) => {
         const isReplyTo = comment.tags.filter(
@@ -246,7 +296,6 @@ const CommentSection: React.FC<CommentSectionProps> = ({
           return !isReplyTo || replyTo === eventId;
         }
 
-        // If parentId is specified, we want replies to that parentId
         return comment.tags.some(
           (tag) => tag[1] === parentId && tag[3] === "reply"
         );
@@ -255,10 +304,12 @@ const CommentSection: React.FC<CommentSectionProps> = ({
         const hasReplies = comments.some((c) =>
           c.tags.some((tag) => tag[3] === "reply" && tag[1] === comment.id)
         );
+        // Ancestors for comments nested under this one = current ancestors + this comment's pubkey
+        const childAncestors = dedup([...accumulatedAncestors, comment.pubkey]);
 
         return (
           <div key={comment.id} style={{ marginLeft: "8px" }}>
-            <CommentCard comment={comment} depth={depth} onReply={setReplyTo}>
+            <CommentCard comment={comment} depth={depth} commentAncestors={accumulatedAncestors}>
               {/* Show/Hide Replies Button */}
               {hasReplies && (
                 <Box sx={{ px: 2, pb: 1 }}>
@@ -283,25 +334,13 @@ const CommentSection: React.FC<CommentSectionProps> = ({
               )}
             </CommentCard>
 
-            {/* Reply input when this comment is selected for replying */}
-            <Collapse in={replyTo === comment.id} timeout={200} unmountOnExit>
-              <Box sx={{ mt: 1, ml: 1 }}>
-                <CommentInput
-                  onSubmit={(content) => {
-                    handleSubmitComment(content, comment.id);
-                    setReplyTo(null);
-                  }}
-                />
-              </Box>
-            </Collapse>
-
             {/* Render child comments if visible */}
             <Collapse
               in={!!showReplies.get(comment.id)}
               timeout={200}
               unmountOnExit
             >
-              {renderComments(comments, comment.id)}
+              {renderComments(comments, comment.id, childAncestors)}
             </Collapse>
           </div>
         );
@@ -317,7 +356,12 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
   return (
     <div style={{ width: "100%" }}>
-      <CommentInput onSubmit={(content) => handleSubmitComment(content)} />
+      <CommentInput onSubmit={(content) => handleSubmitComment(content, undefined, topLevelNotify)} />
+      <NotifyHint
+        pubkeys={topLevelNotify}
+        profiles={profiles}
+        onRemove={(pk) => setTopLevelNotify((prev) => prev.filter((p) => p !== pk))}
+      />
       <div style={{ marginTop: "16px" }}>
         {comments.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
@@ -328,7 +372,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
             Comments
           </Typography>
         )}
-        {renderComments(Array.from(localCommentsMap.values()), null)}
+        {renderComments(Array.from(localCommentsMap.values()), null, topLevelNotify)}
       </div>
 
       {publishResult && (

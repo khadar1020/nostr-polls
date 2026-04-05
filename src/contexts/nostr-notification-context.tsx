@@ -21,6 +21,7 @@ interface NotificationsContextInterface {
 
   markAllAsRead: () => void;
   markAsRead: (id: string) => void;
+  refresh: () => void;
 
   lastSeen: number | null;
   pollMap: Map<string, Event>;
@@ -45,6 +46,8 @@ export function NostrNotificationsProvider({
   const [lastSeen, setLastSeen] = useState<number | null>(null);
   // Ref so pushNotification always reads the current value without stale closure issues
   const lastSeenRef = useRef<number | null>(null);
+  // Track the highest created_at we've seen so refresh knows where to start from
+  const latestNotifTsRef = useRef<number>(0);
 
   const pollMap = useRef<Map<string, Event>>(new Map());
 
@@ -79,6 +82,10 @@ export function NostrNotificationsProvider({
   const pushNotification = useCallback((event: Event) => {
     // Don't notify about your own activity
     if (event.pubkey === user?.pubkey) return;
+
+    if (event.created_at > latestNotifTsRef.current) {
+      latestNotifTsRef.current = event.created_at;
+    }
 
     setNotifications((prev) => {
       if (prev.has(event.id)) return prev;
@@ -194,6 +201,40 @@ export function NostrNotificationsProvider({
 
   //
   // ────────────────────────────────────────────────────────────
+  // Reconnect on visibility change (handles mobile WS drops)
+  // ────────────────────────────────────────────────────────────
+  //
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        nostrRuntime.reconnect();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  //
+  // ────────────────────────────────────────────────────────────
+  // Refresh — one-shot catch-up fetch since the last event we saw
+  // ────────────────────────────────────────────────────────────
+  //
+  const refresh = useCallback(() => {
+    if (!user?.pubkey || !relays.length) return;
+    const since = latestNotifTsRef.current > 0
+      ? latestNotifTsRef.current
+      : Math.floor((Date.now() - DEFAULT_LOOKBACK_MS) / 1000);
+    const filters = buildFilters(user.pubkey, since);
+    let handle = nostrRuntime.subscribe(relays, filters, {
+      onEvent: pushNotification,
+      onEose: () => handle.unsubscribe(),
+    });
+    // Safety: close after 10 s if EOSE never arrives
+    setTimeout(() => handle.unsubscribe(), 10_000);
+  }, [user?.pubkey, relays, pushNotification]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  //
+  // ────────────────────────────────────────────────────────────
   // Mark read logic
   // ────────────────────────────────────────────────────────────
   //
@@ -233,6 +274,7 @@ export function NostrNotificationsProvider({
         unreadCount,
         markAllAsRead,
         markAsRead,
+        refresh,
         lastSeen,
         pollMap: pollMap.current,
       }}
