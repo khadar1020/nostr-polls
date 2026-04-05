@@ -1,3 +1,9 @@
+# 1.7.6
+- Rating UI Uplifted
+- Fix App Search
+- Fix Initial Feed loading in topics, Following and Reacted Feeds.
+- Move Settings to a new screen
+
 # 1.7.5
 - Add Movie Search
 - Fix publish on Ratings on DMs

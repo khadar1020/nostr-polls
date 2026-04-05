@@ -4,7 +4,6 @@ import {
   CardContent,
   Collapse,
   Box,
-  IconButton,
   Fade,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -134,10 +133,9 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({
                 alignItems: "center",
                 cursor: "pointer",
                 background: (theme) =>
-                  `linear-gradient(to left, transparent, ${
-                    theme.palette.mode === "dark"
-                      ? theme.palette.background.paper
-                      : theme.palette.background.paper
+                  `linear-gradient(to left, transparent, ${theme.palette.mode === "dark"
+                    ? theme.palette.background.paper
+                    : theme.palette.background.paper
                   } 60%)`,
                 pr: 2,
                 pl: 0.25,
@@ -168,10 +166,9 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({
                 cursor: "pointer",
                 // Gradient fade from transparent to card background
                 background: (theme) =>
-                  `linear-gradient(to right, transparent, ${
-                    theme.palette.mode === "dark"
-                      ? theme.palette.background.paper
-                      : theme.palette.background.paper
+                  `linear-gradient(to right, transparent, ${theme.palette.mode === "dark"
+                    ? theme.palette.background.paper
+                    : theme.palette.background.paper
                   } 60%)`,
                 pl: 2,
                 pr: 0.25,
