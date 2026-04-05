@@ -10,7 +10,7 @@ import {
 import { hexToBytes, bytesToHex } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
 import { defaultRelays } from "./index";
-import { pool, nostrRuntime } from "../singletons";
+import { nostrRuntime } from "../singletons";
 import { signerManager } from "../singletons/Signer/SignerManager";
 
 // A rumor is an unsigned event with an id
@@ -140,7 +140,7 @@ export async function publishInboxRelays(relays: string[]): Promise<void> {
     content: "",
   };
   const signed = await signer.signEvent(event);
-  pool.publish(defaultRelays, signed);
+  nostrRuntime.publish(defaultRelays, signed);
 }
 
 /**
@@ -362,7 +362,7 @@ export async function wrapAndSendDM(
   // Deduplicate by relay URL so we get one promise per unique relay.
   const relayMap = new Map<string, RelayPublish>();
   for (const { event, relays } of wraps) {
-    const promises = pool.publish(relays, event);
+    const promises = nostrRuntime.publish(relays, event);
     relays.forEach((relay, i) => {
       if (!relayMap.has(relay)) {
         relayMap.set(relay, { relay, promise: promises[i] });
@@ -418,8 +418,8 @@ export async function wrapAndSendReaction(
       senderPubkey
     );
 
-    await Promise.allSettled(pool.publish(recipientRelays, wrapForRecipient));
-    await Promise.allSettled(pool.publish(senderRelays, wrapForSender));
+    await Promise.allSettled(nostrRuntime.publish(recipientRelays, wrapForRecipient));
+    await Promise.allSettled(nostrRuntime.publish(senderRelays, wrapForSender));
   } else {
     if (!signer.nip44Encrypt) {
       throw new Error(
@@ -432,14 +432,14 @@ export async function wrapAndSendReaction(
       rumor,
       recipientPubkey
     );
-    await Promise.allSettled(pool.publish(recipientRelays, recipientWrap));
+    await Promise.allSettled(nostrRuntime.publish(recipientRelays, recipientWrap));
 
     const senderWrap = await createGiftWrapForSigner(
       signer,
       rumor,
       senderPubkey
     );
-    await Promise.allSettled(pool.publish(senderRelays, senderWrap));
+    await Promise.allSettled(nostrRuntime.publish(senderRelays, senderWrap));
   }
 
   return rumor;

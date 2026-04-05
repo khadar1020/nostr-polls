@@ -1,6 +1,6 @@
 import { Filter, SimplePool } from 'nostr-tools';
 import { EventStore } from './EventStore';
-import { generateFilterHash, chunkFilter } from './utils/filterUtils';
+import { generateFilterHash, chunkFilter, poolNormalizeUrl } from './utils/filterUtils';
 import {
   ManagedSubscription,
   EventCallback,
@@ -57,6 +57,13 @@ export class SubscriptionManager {
           // Only close if nothing re-retained this relay in the meantime.
           if (!this.relayRefCounts.has(url)) {
             this.pool.close([url]);
+            // Also remove the relay object from pool.relays so ensureRelay()
+            // creates a fresh WebSocket next time instead of reusing the
+            // now-dead object (pool.close sets _connected=false but leaves
+            // the stale object in the map, causing WebSocket errors on publish).
+            const poolRelays = (this.pool as any).relays as Map<string, unknown>;
+            const normalized = poolNormalizeUrl(url);
+            if (normalized) poolRelays.delete(normalized);
           }
         }, 30_000);
         this.relayCloseTimers.set(url, timer);

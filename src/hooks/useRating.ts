@@ -3,7 +3,7 @@ import { useContext, useEffect, useRef } from "react";
 import { signEvent } from "../nostr";
 import { useRelays } from "./useRelays";
 import { RatingContext } from "../contexts/RatingProvider";
-import { pool } from "../singletons";
+import { waitForPublish } from "../utils/publish";
 
 export const useRating = (entityId: string) => {
   const { ratings, registerEntityId, getUserRating } =
@@ -45,9 +45,7 @@ export const useRating = (entityId: string) => {
     try {
       const signed = await signEvent(ratingEvent, undefined);
       if (!signed) throw new Error("Signer couldn't sign Event");
-      pool.publish(relays, signed).forEach((p: Promise<string>) => {
-        p.then((message: string) => console.log("Relay Replied: ", message));
-      });
+      await waitForPublish(relays, signed);
     } catch (err) {
       console.error("Error publishing rating:", err);
     } finally {

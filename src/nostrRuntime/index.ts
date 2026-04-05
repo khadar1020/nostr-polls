@@ -7,6 +7,7 @@ import {
   RuntimeStats,
   SubscriptionDebugInfo,
 } from './types';
+import { poolNormalizeUrl } from './utils/filterUtils';
 
 /**
  * NostrRuntime - Centralized Nostr subscription and event storage
@@ -48,6 +49,15 @@ export class NostrRuntime {
     this.pool = pool;
     this.eventStore = new EventStore();
     this.subscriptionManager = new SubscriptionManager(pool, this.eventStore);
+
+    // Belt-and-suspenders: evict dead relay connections every 60 s.
+    // Catches sockets that died unexpectedly (NAT timeout, server restart)
+    // and were never cleaned up by releaseRelays.
+    setInterval(() => {
+      const poolRelays = (this.pool as any).relays as Map<string, any>;
+      if (poolRelays.size === 0) return;
+      this.cleanStaleRelays(Array.from(poolRelays.keys()));
+    }, 60_000);
   }
 
   /**
@@ -395,6 +405,16 @@ export class NostrRuntime {
   }
 
   /**
+   * Publish an event, automatically evicting dead relay connections first.
+   * Use this instead of pool.publish() directly to avoid WebSocket errors.
+   * Returns the same per-relay promise array as pool.publish().
+   */
+  publish(relays: string[], event: Event): Promise<string>[] {
+    this.cleanStaleRelays(relays);
+    return this.pool.publish(relays, event);
+  }
+
+  /**
    * Force-close and remove specific relays from the pool so the next
    * connection attempt (subscribe or publish) creates a fresh WebSocket.
    *
@@ -467,18 +487,3 @@ export * from './types';
 export { EventStore } from './EventStore';
 export { SubscriptionManager } from './SubscriptionManager';
 
-/** Replicates nostr-tools' internal normalizeURL so we can match pool.relays keys. */
-function poolNormalizeUrl(url: string): string | null {
-  try {
-    if (!url.includes('://')) url = 'wss://' + url;
-    const p = new URL(url);
-    p.pathname = p.pathname.replace(/\/+/g, '/');
-    if (p.pathname.endsWith('/')) p.pathname = p.pathname.slice(0, -1);
-    if ((p.port === '80' && p.protocol === 'ws:') || (p.port === '443' && p.protocol === 'wss:')) p.port = '';
-    p.searchParams.sort();
-    p.hash = '';
-    return p.toString();
-  } catch {
-    return null;
-  }
-}

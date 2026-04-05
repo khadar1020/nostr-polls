@@ -139,6 +139,22 @@ export function chunkFilter(filter: Filter, chunkSize: number = 1000): Filter[] 
   return chunks;
 }
 
+/** Replicates nostr-tools' internal normalizeURL so we can match pool.relays keys. */
+export function poolNormalizeUrl(url: string): string | null {
+  try {
+    if (!url.includes('://')) url = 'wss://' + url;
+    const p = new URL(url);
+    p.pathname = p.pathname.replace(/\/+/g, '/');
+    if (p.pathname.endsWith('/')) p.pathname = p.pathname.slice(0, -1);
+    if ((p.port === '80' && p.protocol === 'ws:') || (p.port === '443' && p.protocol === 'wss:')) p.port = '';
+    p.searchParams.sort();
+    p.hash = '';
+    return p.toString();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Extract tag index keys from an event
  * Returns keys like "e:eventid" or "p:pubkey"
