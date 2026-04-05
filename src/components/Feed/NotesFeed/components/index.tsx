@@ -104,7 +104,7 @@ const NotesFeed = () => {
               onRegisterRefresh={(fn) => { refreshRef.current = fn; }}
             />
           ) : activeTab === "reacted" ? (
-            <ReactedFeed />
+            <ReactedFeed onRegisterRefresh={(fn) => { refreshRef.current = fn; }} />
           ) : (
             <DiscoverFeed
               noteMode={noteMode}

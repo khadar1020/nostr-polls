@@ -1,15 +1,17 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Event, Filter } from "nostr-tools";
 import { useRelays } from "../../../../hooks/useRelays";
 import { nostrRuntime } from "../../../../singletons";
 
 export const useReactedNotes = (user: any) => {
   const [loading, setLoading] = useState(false);
-  const [lastTimestamp, setLastTimestamp] = useState<number | undefined>(undefined);
   const [version, setVersion] = useState(0);
   const { relays } = useRelays();
 
-  // Query runtime for reactions and reacted notes
+  // Ref-based guards — no stale closures, stable fetchReactedNotes reference
+  const oldestTimestampRef = useRef<number | null>(null);
+  const loadingRef = useRef(false);
+
   const reactionEvents = useCallback(() => {
     if (!user?.follows?.length) return new Map<string, Event>();
 
@@ -29,15 +31,11 @@ export const useReactedNotes = (user: any) => {
   const reactedEvents = useCallback(() => {
     if (!user?.follows?.length) return new Map<string, Event>();
 
-    // Get all reactions
     const reactions = Array.from(reactionEvents().values());
-
-    // Extract reacted note IDs
     const reactedNoteIds = reactions
       .map((e) => e.tags.find((tag) => tag[0] === "e")?.[1])
       .filter(Boolean) as string[];
 
-    // Query for those notes
     const noteEvents = nostrRuntime.query({
       kinds: [1],
       ids: reactedNoteIds,
@@ -51,46 +49,40 @@ export const useReactedNotes = (user: any) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.follows, version, reactionEvents]);
 
-  const fetchReactedNotes = async () => {
-    if (!user?.follows?.length || loading) return;
+  const fetchReactedNotes = useCallback(async () => {
+    if (!user?.follows?.length || loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
 
-    // Step 1: Fetch reactions
     const reactionFilter: Filter = {
       kinds: [7],
       authors: user.follows,
       limit: 20,
     };
-    if (lastTimestamp) {
-      reactionFilter.until = lastTimestamp;
+
+    if (oldestTimestampRef.current !== null) {
+      reactionFilter.until = oldestTimestampRef.current;
+    } else {
+      reactionFilter.since = Math.floor(Date.now() / 1000) - 30 * 86400;
     }
 
-    let newReactionEvents: Event[] = [];
     let reactedNoteIds: string[] = [];
 
     const reactionHandle = nostrRuntime.subscribe(relays, [reactionFilter], {
       onEvent: (event) => {
-        newReactionEvents.push(event);
         const noteId = event.tags.find((tag) => tag[0] === "e")?.[1];
-        if (noteId) {
-          reactedNoteIds.push(noteId);
+        if (noteId) reactedNoteIds.push(noteId);
+        if (oldestTimestampRef.current === null || event.created_at < oldestTimestampRef.current) {
+          oldestTimestampRef.current = event.created_at;
         }
       },
       onEose: () => {
         reactionHandle.unsubscribe();
 
-        // Step 2: Fetch the original notes
         if (reactedNoteIds.length > 0) {
           const uniqueNoteIds = Array.from(new Set(reactedNoteIds));
-          const noteFilter: Filter = {
-            kinds: [1],
-            ids: uniqueNoteIds,
-          };
-
-          const noteHandle = nostrRuntime.subscribe(relays, [noteFilter], {
-            onEvent: () => {
-              // Events automatically stored in runtime
-            },
+          const noteHandle = nostrRuntime.subscribe(relays, [{ kinds: [1], ids: uniqueNoteIds }], {
+            onEvent: () => {},
             onEose: () => {
               noteHandle.unsubscribe();
               finishFetch();
@@ -103,22 +95,24 @@ export const useReactedNotes = (user: any) => {
     });
 
     const finishFetch = () => {
-      if (newReactionEvents.length > 0) {
-        const oldest = newReactionEvents.reduce((min, e) =>
-          e.created_at < min.created_at ? e : min
-        );
-        setLastTimestamp(oldest.created_at);
-      }
-
       setVersion((v) => v + 1);
+      loadingRef.current = false;
       setLoading(false);
     };
-  };
+  }, [user?.follows, relays]);
+
+  const refreshReactedNotes = useCallback(() => {
+    oldestTimestampRef.current = null;
+    loadingRef.current = false;
+    setVersion(0);
+    fetchReactedNotes();
+  }, [fetchReactedNotes]);
 
   return {
     reactedEvents: reactedEvents(),
     reactionEvents: reactionEvents(),
     fetchReactedNotes,
+    refreshReactedNotes,
     loading,
   };
 };

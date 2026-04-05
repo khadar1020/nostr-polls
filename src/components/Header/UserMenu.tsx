@@ -4,7 +4,6 @@ import { useUserContext } from "../../hooks/useUserContext";
 import { ColorSchemeToggle } from "../ColorScheme";
 import { styled } from "@mui/system";
 import { LoginModal } from "../Login/LoginModal";
-import { SettingsModal } from "./SettingsModal";
 import { ContactsModal } from "./ContactsModal";
 import { signerManager } from "../../singletons/Signer/SignerManager";
 import { WarningAmber } from "@mui/icons-material";
@@ -21,7 +20,6 @@ const ListItem = styled("li")(() => ({
 export const UserMenu: React.FC = () => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [showLoginModal, setShowLoginModal] = React.useState(false);
-  const [showSettings, setShowSettings] = React.useState(false);
   const [showKeysModal, setShowKeysModal] = React.useState(false);
   const [showContactsModal, setShowContactsModal] = React.useState(false);
   const { user } = useUserContext();
@@ -120,7 +118,7 @@ export const UserMenu: React.FC = () => {
                 </MenuItem>
               ),
 
-              <MenuItem key="settings" onClick={() => setShowSettings(true)}>
+              <MenuItem key="settings" onClick={() => { navigate("/settings"); setAnchorEl(null); }}>
                 Settings
               </MenuItem>,
               <MenuItem key="logout" onClick={handleLogOut}>Log Out</MenuItem>,
@@ -155,10 +153,6 @@ export const UserMenu: React.FC = () => {
               </ListItem>,
             ]}
       </Menu>
-      <SettingsModal
-        open={showSettings}
-        onClose={() => setShowSettings(false)}
-      />
       <LoginModal
         open={showLoginModal}
         onClose={() => setShowLoginModal(false)}

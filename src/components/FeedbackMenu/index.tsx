@@ -5,14 +5,11 @@ import {
   Collapse,
   Box,
   IconButton,
-  Typography,
-  Grow,
   Fade,
 } from "@mui/material";
-import StarBorderIcon from "@mui/icons-material/StarBorder";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import Rate from "../Ratings/Rate";
+import RatingPopover from "../Ratings/RatingPopover";
 import CommentTrigger from "../Common/Comments/CommentTrigger";
 import CommentSection from "../Common/Comments/CommentSection";
 import Likes from "../Common/Likes/likes";
@@ -20,7 +17,6 @@ import Zap from "../Common/Zaps/zaps";
 import { Event } from "nostr-tools";
 import RepostButton from "../Common/Repost/reposts";
 import ShareButton from "../Common/Share/ShareButton";
-import { useRating } from "../../hooks/useRating";
 
 interface FeedbackMenuProps {
   event: Event;
@@ -34,13 +30,9 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({
   depth = 0,
 }) => {
   const [showComments, setShowComments] = useState(false);
-  const [showRating, setShowRating] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  const ratingKey = `event:${event.id}`;
-  const { averageRating, totalRatings } = useRating(ratingKey);
 
   const checkOverflow = useCallback(() => {
     const el = scrollRef.current;
@@ -75,11 +67,6 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({
     setShowComments(!showComments);
   };
 
-  const handleToggleRating = () => {
-    setShowRating(!showRating);
-  };
-
-  const displayRating = averageRating ? (averageRating * 5).toFixed(1) : null;
   const isNested = depth > 0;
 
   return (
@@ -129,51 +116,8 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({
 
             <Zap pollEvent={event} />
 
-            {/* Rating icon */}
-            <Box
-              display="flex"
-              alignItems="center"
-              sx={{ cursor: "pointer" }}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleToggleRating();
-              }}
-            >
-              <IconButton
-                size="small"
-                sx={{ p: 0.25, padding: 2 }}
-                // color={showRating ? "primary" : "default"}
-              >
-                {totalRatings ? (
-                  <StarBorderIcon
-                    sx={{
-                      fontSize: "22px !important",
-                      transition: "transform 0.2s ease",
-                      transform: showRating ? "scale(1.2)" : "scale(1)",
-                      color: "#FAD13F",
-                    }}
-                  />
-                ) : (
-                  <StarBorderIcon
-                    sx={{
-                      fontSize: "22px !important",
-                      transition: "transform 0.2s ease",
-                      transform: showRating ? "scale(1.2)" : "scale(1)",
-                    }}
-                  />
-                )}
-              </IconButton>
-              {displayRating && (
-                <Grow in>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ fontWeight: 500, fontSize: "0.7rem" }}
-                  >
-                    {displayRating}
-                  </Typography>
-                </Grow>
-              )}
+            <Box sx={{ ml: 1.5, mt: 0.3 }}>
+              <RatingPopover entityId={event.id} entityType="event" iconSize={26} />
             </Box>
           </Box>
 
@@ -244,20 +188,6 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({
             </Box>
           </Fade>
         </Box>
-
-        {/* Rating panel */}
-        <Collapse in={showRating} timeout={250} unmountOnExit>
-          <Box
-            sx={{
-              mt: 1.5,
-              pt: 1.5,
-              borderTop: 1,
-              borderColor: "divider",
-            }}
-          >
-            <Rate entityId={event.id} entityType="event" />
-          </Box>
-        </Collapse>
 
         {/* Comment section */}
         {depth < MAX_DEPTH && (

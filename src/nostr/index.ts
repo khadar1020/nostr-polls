@@ -15,19 +15,16 @@ export const defaultRelays = [
   // relay.nostr.band removed — confirmed dead
 ];
 
-// Relays that support NIP-50 free-text search (mirrors Snort's SearchRelays config)
+// Relays that support NIP-50 free-text search
 export const searchRelays = [
-  "wss://search.nos.today/",
-  "wss://relay.noswhere.com/",
-  "wss://nostr-relay.app",
+  "wss://relay.noswhere.com",
+  "wss://nostr.wine"
 ];
 
-// Profile-specific search relays — broader coverage for kind 0
-// Primal has one of the largest profile indexes on the network
+// Profile-specific search relays
 export const profileSearchRelays = [
-  "wss://relay.primal.net",
-  "wss://search.nos.today/",
-  "wss://relay.noswhere.com/",
+  "wss://relay.noswhere.com",
+  "wss://nostr.wine",
 ];
 
 export const fetchUserProfile = async (

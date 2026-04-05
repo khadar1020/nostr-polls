@@ -8,6 +8,7 @@ import { useDiscoverNotes } from "../hooks/useDiscoverNotes";
 import type { NoteMode } from "./index";
 import UnifiedFeed from "../../UnifiedFeed";
 import { useReports } from "../../../../hooks/useReports";
+import { useRelays } from "../../../../hooks/useRelays";
 
 const isRootNote = (event: { tags: string[][] }) =>
   !event.tags.some((t) => t[0] === "e");
@@ -22,6 +23,7 @@ const DiscoverFeed = ({
   const { user, requestLogin } = useUserContext();
   const { notes, pendingCount, fetchNotes, refreshNotes, checkForNewer, loadingMore, refreshing, mergeNewNotes } =
     useDiscoverNotes();
+  const { relays } = useRelays();
 
   // Register refresh with parent header button
   useEffect(() => {
@@ -31,11 +33,11 @@ const DiscoverFeed = ({
   const { requestReportCheck, requestUserReportCheck } = useReports();
 
   useEffect(() => {
-    if (user && user.webOfTrust && user.webOfTrust.size > 0) {
+    if (user?.webOfTrust?.size) {
       fetchNotes(user.webOfTrust);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, relays]);
 
   const mergedNotes = useMemo(() => {
     return Array.from(notes.values())

@@ -9,7 +9,6 @@ import {
   Checkbox,
   DialogActions,
   Button,
-  CircularProgress,
   IconButton,
 } from "@mui/material";
 import ShieldIcon from "@mui/icons-material/Shield";
@@ -110,27 +109,13 @@ const MyTopicsFeed = ({ onNavigateToDiscover, onSearchClick, onRegisterRefresh }
     );
   }
 
-  if (loading) {
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "center",
-          py: 6,
-          height: "100%",
-        }}
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   const hasModerators = moderatorsByTopic.size > 0;
 
   return (
     <>
       <UnifiedFeed
         data={notes}
+        loading={loading}
         newItemCount={pendingCount}
         onShowNewItems={mergeNewNotes}
         newItemLabel="notes"

@@ -1,20 +1,27 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useUserContext } from "../../../../hooks/useUserContext";
 import { useReactedNotes } from "../hooks/useReactedNotes";
 import ReactedNoteCard from "./ReactedNoteCard";
 import { Event } from "nostr-tools";
 import UnifiedFeed from "../../UnifiedFeed";
 
-const ReactedFeed = () => {
+const ReactedFeed = ({ onRegisterRefresh }: { onRegisterRefresh?: (fn: () => void) => void }) => {
   const { user } = useUserContext();
-  const { reactedEvents, reactionEvents, fetchReactedNotes, loading } =
+  const { reactedEvents, reactionEvents, fetchReactedNotes, refreshReactedNotes, loading } =
     useReactedNotes(user);
+  const fetchedRef = useRef(false);
 
+  // Register refresh with parent SpeedDial
   useEffect(() => {
-    if (reactedEvents.size === 0) {
-      fetchReactedNotes();
-    }
-  }, [user, reactedEvents, fetchReactedNotes]);
+    onRegisterRefresh?.(refreshReactedNotes);
+  }, [onRegisterRefresh, refreshReactedNotes]);
+
+  // Fetch once user.follows is available — retries if user wasn't ready on mount
+  useEffect(() => {
+    if (fetchedRef.current || !user?.follows?.length) return;
+    fetchedRef.current = true;
+    fetchReactedNotes();
+  }, [user, fetchReactedNotes]);
 
   const sorted = Array.from(reactedEvents.values()).sort(
     (a, b) => b.created_at - a.created_at,
@@ -23,8 +30,11 @@ const ReactedFeed = () => {
   return (
     <UnifiedFeed
       data={sorted}
-      loadingMore={loading}
+      loading={loading && sorted.length === 0}
+      loadingMore={loading && sorted.length > 0}
       onEndReached={fetchReactedNotes}
+      onRefresh={refreshReactedNotes}
+      refreshing={loading && sorted.length > 0}
       itemContent={(index, note: Event) => (
         <ReactedNoteCard
           key={note.id}

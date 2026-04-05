@@ -12,6 +12,7 @@ export const useFollowingNotes = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const missingNotesRef = useRef<Set<string>>(new Set());
   const initialLoadDoneRef = useRef(false);
+  const oldestEventTimestampRef = useRef<number | null>(null);
 
   const { relays } = useRelays();
   const { user } = useUserContext();
@@ -66,6 +67,15 @@ export const useFollowingNotes = () => {
     );
   }, [user?.follows, relays]);
 
+  // Retry initial load when user-specific relays arrive (NIP-65 fetch completes after
+  // follows are loaded). First attempt uses defaultRelays; this catches the race where
+  // those relays didn't have the events but user-specific relays do.
+  useEffect(() => {
+    if (!user?.follows?.length || !relays?.length || initialLoadDoneRef.current || loadingMore) return;
+    fetchNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relays]);
+
   // Poll for newer notes every 60s after initial load; buffer via pendingCount
   useEffect(() => {
     if (!user?.follows?.length || !relays?.length) return;
@@ -106,35 +116,19 @@ export const useFollowingNotes = () => {
 
     const now = Math.floor(Date.now() / 1000);
     const noteFilter: Filter = { kinds: [1], authors, limit: 30 };
-    if (fresh) {
-      // Fresh refresh: fetch last 24h
+    if (fresh || oldestEventTimestampRef.current === null) {
+      // Initial load or refresh: fetch last 24h
       noteFilter.since = now - 86400;
     } else {
-      const currentNotes = notes();
-      if (currentNotes.size > 0) {
-        // Pagination: go backwards from oldest note
-        noteFilter.until = Array.from(currentNotes.values()).sort(
-          (a, b) => a.created_at - b.created_at
-        )[0].created_at;
-      } else {
-        // Initial load: start with last 24h
-        noteFilter.since = now - 86400;
-      }
+      // Pagination: go backwards from oldest event this feed has seen
+      noteFilter.until = oldestEventTimestampRef.current;
     }
 
     const repostFilter: Filter = { kinds: [6], authors, limit: 30 };
-    if (fresh) {
+    if (fresh || oldestEventTimestampRef.current === null) {
       repostFilter.since = now - 86400;
     } else {
-      const currentReposts = reposts();
-      if (currentReposts.size > 0) {
-        const oldestRepostTime = Math.min(
-          ...Array.from(currentReposts.values()).flat().map((r) => r.created_at)
-        );
-        repostFilter.until = oldestRepostTime;
-      } else {
-        repostFilter.since = now - 86400;
-      }
+      repostFilter.until = oldestEventTimestampRef.current;
     }
 
     let hasNewEvents = false;
@@ -143,6 +137,9 @@ export const useFollowingNotes = () => {
         if (event.kind === 6) {
           const originalNoteId = event.tags.find((t) => t[0] === "e")?.[1];
           if (originalNoteId) missingNotesRef.current.add(originalNoteId);
+        }
+        if (oldestEventTimestampRef.current === null || event.created_at < oldestEventTimestampRef.current) {
+          oldestEventTimestampRef.current = event.created_at;
         }
         hasNewEvents = true;
       },
@@ -156,11 +153,12 @@ export const useFollowingNotes = () => {
       },
       fresh,
     });
-  }, [user?.follows, relays, loadingMore, notes, reposts, startMissingNotesFetcher]);
+  }, [user?.follows, relays, loadingMore, startMissingNotesFetcher]);
 
   const refreshNotes = useCallback(() => {
     initialLoadDoneRef.current = false;
     missingNotesRef.current.clear();
+    oldestEventTimestampRef.current = null;
     setVersion(0);
     setPendingCount(0);
     fetchNotes(true);

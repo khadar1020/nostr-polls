@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { nip19, nip05, Event } from "nostr-tools";
 import { nostrRuntime } from "../../singletons";
-import { searchRelays, profileSearchRelays } from "../../nostr";
+import { searchRelays } from "../../nostr";
 
 export type InputType = "idle" | "nip19" | "nip05" | "hashtag" | "text";
 
@@ -136,40 +136,23 @@ export function useSearch(): UseSearchReturn {
     const timer = setTimeout(async () => {
       setLoading(true);
       setError(null);
-      // Show all unique relays used across both queries
-      const allRelays = Array.from(
-        new Set([...profileSearchRelays, ...searchRelays])
-      );
-      setSearchedRelays(allRelays);
+      setSearchedRelays(searchRelays);
 
       try {
-        const [profileEvents, contentEvents] = await Promise.all([
-          // Profiles on broader relay set (Primal has massive profile coverage)
-          Promise.race([
-            nostrRuntime.querySync(profileSearchRelays, {
-              search: trimmed,
-              kinds: [0],
-              limit: 20,
-            }),
-            timeout<Event[]>(6000),
-          ]).catch(() => [] as Event[]),
-
-          // Notes + polls on NIP-50 search relays
-          Promise.race([
-            nostrRuntime.querySync(searchRelays, {
-              search: trimmed,
-              kinds: [1, 1068],
-              limit: 20,
-            }),
-            timeout<Event[]>(6000),
-          ]).catch(() => [] as Event[]),
-        ]);
+        const events = await Promise.race([
+          nostrRuntime.querySync(searchRelays, {
+            search: trimmed,
+            kinds: [0, 1, 1068],
+            limit: 30,
+          }),
+          timeout<Event[]>(6000),
+        ]).catch(() => [] as Event[]);
 
         if (!cancelled) {
           setResults({
-            profiles: profileEvents,
-            notes: contentEvents.filter((e) => e.kind === 1),
-            polls: contentEvents.filter((e) => e.kind === 1068),
+            profiles: events.filter((e) => e.kind === 0),
+            notes: events.filter((e) => e.kind === 1),
+            polls: events.filter((e) => e.kind === 1068),
           });
         }
       } catch (err: any) {

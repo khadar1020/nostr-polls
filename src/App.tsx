@@ -63,6 +63,7 @@ import ConversationList from "./components/Messages/ConversationList";
 import ChatView from "./components/Messages/ChatView";
 import NewConversation from "./components/Messages/NewConversation";
 import NotificationsPage from "./components/Notifications/NotificationsPage";
+import { SettingsScreen } from "./components/Settings/SettingsScreen";
 
 declare global {
   interface Window {
@@ -146,6 +147,7 @@ function AppContent() {
             path="/result/:eventId"
             element={<ScrollPage><PollResults /></ScrollPage>}
           />
+          <Route path="/settings" element={<SettingsScreen />} />
           <Route path="/notifications" element={<ScrollPage><NotificationsPage /></ScrollPage>} />
           <Route path="/messages" element={<ScrollPage><ConversationList /></ScrollPage>} />
           <Route path="/messages/new" element={<ScrollPage><NewConversation /></ScrollPage>} />

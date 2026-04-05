@@ -217,10 +217,11 @@ export function useMyTopicsFeed(myTopics: Set<string>) {
 
     if (!fresh) initialLoadDoneRef.current = false;
 
+    const since7d = Math.floor(Date.now() / 1000) - 7 * 86400;
     const sub = nostrRuntime.subscribe(
       relays,
       [
-        { kinds: [1], "#t": topics, limit: 200 },
+        { kinds: [1], "#t": topics, since: since7d, limit: 200 },
         { kinds: [OFFTOPIC_KIND], "#t": topics, limit: 500 },
         { kinds: [5], "#k": [String(OFFTOPIC_KIND)], limit: 500 },
       ],
@@ -267,7 +268,6 @@ export function useMyTopicsFeed(myTopics: Set<string>) {
                 return next;
               });
             }
-            if (!fresh) setLoading(false);
           }
         },
         fresh,
