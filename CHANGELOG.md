@@ -1,4 +1,5 @@
 # 1.7.5
+- Add Movie Search
 - Fix publish on Ratings on DMs
 - Fix Stale relay connections
 
