@@ -52,11 +52,9 @@ const MoviesFeed: React.FC = () => {
 
     const handle = nostrRuntime.subscribe(currentRelays, [filter], {
       onEvent: (event) => {
-        console.log("event", event.id, event.created_at);
         const dTag = event.tags.find((t) => t[0] === "d");
         if (dTag && dTag[1].startsWith("movie:")) {
           const imdbId = dTag[1].split(":")[1];
-          console.log("movie found", imdbId);
           if (!seen.current.has(imdbId)) {
             seen.current.add(imdbId);
 
@@ -106,7 +104,6 @@ const MoviesFeed: React.FC = () => {
       timeoutRef.current = null;
     }
     loadingRef.current = false;
-    console.log("relays changed", relays);
     // Reset feed state so the new relay's events start fresh
     seen.current.clear();
     setMovieIds(new Set());

@@ -102,7 +102,7 @@ export function parseNotification(ev: Event): ParsedNotification {
       try {
         sats = nip57.getSatoshisAmountFromBolt11(bolt11Tag);
       } catch (e) {
-        console.log("Failed to parse bolt11 invoice", e, ev);
+        console.error("Failed to parse bolt11 invoice", e, ev);
       }
     }
 
@@ -113,7 +113,7 @@ export function parseNotification(ev: Event): ParsedNotification {
         const reqObj = JSON.parse(requestEvent) as Event;
         senderPubkey = reqObj.pubkey;
       } catch (e) {
-        console.log("Failed to parse zap request event", e, ev);
+        console.error("Failed to parse zap request event", e, ev);
       }
     }
 

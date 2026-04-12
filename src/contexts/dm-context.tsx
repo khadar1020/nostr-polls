@@ -116,6 +116,10 @@ export function DMProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const seenRumorIds = useRef<Set<string>>(new Set());
   const subRef = useRef<{ unsubscribe: () => void } | null>(null);
+  // Serialise external-signer decryption so the user only sees one prompt at a time
+  const decryptQueue = useRef<Promise<void>>(Promise.resolve());
+  // If the user rejects a decrypt request, stop asking for the rest of the session
+  const decryptionRejected = useRef(false);
 
   const addReactionToConversation = useCallback(
     (rumor: Rumor, myPubkey: string) => {
@@ -261,6 +265,7 @@ export function DMProvider({ children }: { children: ReactNode }) {
     if (!user) {
       setConversations(new Map());
       seenRumorIds.current.clear();
+      decryptionRejected.current = false;
       subRef.current?.unsubscribe();
       subRef.current = null;
       return;
@@ -281,7 +286,7 @@ export function DMProvider({ children }: { children: ReactNode }) {
         [{ kinds: [1059], "#p": [myPubkey] }],
         {
           onEvent: async (event: Event) => {
-            // Check cache first
+            // Cached messages never need the signer — handle immediately
             const cached = getCachedRumor(event.id);
             if (cached) {
               const fakeRumor: Rumor = {
@@ -296,10 +301,24 @@ export function DMProvider({ children }: { children: ReactNode }) {
               return;
             }
 
-            // Decrypt the gift wrap
-            const rumor = await unwrapGiftWrap(event, privateKey);
-            if (rumor) {
-              addMessage(rumor, event.id, myPubkey);
+            if (privateKey) {
+              // Local key: decrypt instantly, no signer prompts
+              const rumor = await unwrapGiftWrap(event, privateKey);
+              if (rumor) addMessage(rumor, event.id, myPubkey);
+            } else {
+              // External signer (Amber / NIP-07 / NIP-46): queue so only one
+              // decrypt request is in-flight at a time — avoids bombarding the
+              // user with simultaneous approval prompts on startup.
+              decryptQueue.current = decryptQueue.current.then(async () => {
+                if (decryptionRejected.current) return;
+                const rumor = await unwrapGiftWrap(event, undefined);
+                if (rumor) {
+                  addMessage(rumor, event.id, myPubkey);
+                } else {
+                  // null means the signer rejected or failed — stop asking
+                  decryptionRejected.current = true;
+                }
+              });
             }
           },
           onEose: () => {

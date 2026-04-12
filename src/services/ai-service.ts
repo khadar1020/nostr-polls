@@ -34,14 +34,12 @@ class AIService {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed.url) {
-          console.log("[AIService] loadConfig: using saved URL:", parsed.url);
           return { url: parsed.url, timeout: parsed.timeout };
         }
       }
     } catch (e) {
       console.warn("[AIService] loadConfig: failed to parse config:", e);
     }
-    console.log("[AIService] loadConfig: using default URL:", DEFAULT_URL);
     return { url: DEFAULT_URL };
   }
 
@@ -89,21 +87,17 @@ class AIService {
    */
   async getModels(): Promise<OllamaResponse<{ models: { name: string }[] }>> {
     const url = `${this.getBaseUrl()}/api/tags`;
-    console.log("[AIService] getModels: fetching", url);
     try {
       const res = await this.fetchWithTimeout(url, { method: "GET" }, 15000);
-      console.log("[AIService] getModels: response status", res.status, res.statusText);
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         console.warn("[AIService] getModels: non-OK response body:", body);
         return { success: false, error: `Ollama returned ${res.status}: ${body}` };
       }
       const json = await res.json();
-      console.log("[AIService] getModels: raw json:", JSON.stringify(json));
       const models: { name: string }[] = (json.models || []).map((m: any) => ({
         name: m.name,
       }));
-      console.log("[AIService] getModels: parsed models:", models.map((m) => m.name));
       return { success: true, data: { models } };
     } catch (error: any) {
       console.error("[AIService] getModels: error:", error.name, error.message, error);

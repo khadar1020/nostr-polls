@@ -94,7 +94,6 @@ function getSingleDMNpub(conversations: Map<string, Conversation>, userPubkey: s
 }
 
 function handleDeepLink(url: string, navigate: ReturnType<typeof useNavigate>) {
-  console.log('[AndroidNotif] handleDeepLink:', url);
   if (url.includes('/messages/')) {
     const npub = url.split('/messages/')[1];
     navigate(`/messages/${npub}`);
@@ -126,16 +125,13 @@ export function useAndroidNotifications() {
 
   // Request permission + register listeners once
   useEffect(() => {
-    console.log('[AndroidNotif] hook mounted, requesting permission');
     initLocalNotifications().then(ok => {
-      console.log('[AndroidNotif] permission granted:', ok);
       permitted.current = ok;
     });
 
     // Handle taps on JS-side local notifications (app alive/backgrounded)
     const tapSub = LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
       const extra = action.notification.extra as NotifExtra | undefined;
-      console.log('[AndroidNotif] notification tapped, extra:', extra);
       if (!extra) return;
       if (extra.target === 'messages') {
         navigateRef.current('npub' in extra && extra.npub ? `/messages/${extra.npub}` : '/messages');
@@ -166,7 +162,6 @@ export function useAndroidNotifications() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     if (!user?.pubkey) return;
-    console.log('[AndroidNotif] saving worker_pubkey');
     Preferences.set({ key: 'worker_pubkey', value: user.pubkey });
   }, [user?.pubkey]);
 
@@ -174,7 +169,6 @@ export function useAndroidNotifications() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     if (!relays?.length) return;
-    console.log('[AndroidNotif] saving worker_relay:', relays[0]);
     Preferences.set({ key: 'worker_relay', value: relays[0] });
   }, [relays]);
 
@@ -195,15 +189,12 @@ export function useAndroidNotifications() {
 
       const notifId = eventIdToNotifId(ev.id);
       const { title, body, extra } = buildEventNotification(ev, pollMap);
-      console.log('[AndroidNotif] firing per-event notification:', notifId, title);
       fireNotification(notifId, title, body, extra);
     }
   }, [unreadCount, notifications, lastSeen, pollMap]);
 
   // Fire when new DMs arrive while backgrounded
   useEffect(() => {
-    console.log('[AndroidNotif] dmUnread changed:', dmUnread,
-      '| prev:', prevDMs.current, '| permitted:', permitted.current, '| hidden:', document.hidden);
     if (!permitted.current) { prevDMs.current = dmUnread; return; }
     if (dmUnread > prevDMs.current && document.hidden) {
       const npub = getSingleDMNpub(conversations, user?.pubkey);

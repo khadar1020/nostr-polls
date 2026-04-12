@@ -4,6 +4,7 @@ import {
   Card,
   CardContent,
   CardMedia,
+  Chip,
   Typography,
   Button,
   IconButton,
@@ -31,6 +32,7 @@ interface FallbackMovieData {
   poster?: string;
   year?: string;
   summary?: string;
+  genres?: string[];
 }
 
 const fallbackMovieCache = new Map<string, FallbackMovieData>();
@@ -83,12 +85,20 @@ const MovieCard: React.FC<MovieCardProps> = ({ imdbId, metadataEvent }) => {
     const fetchFallback = async () => {
       try {
         const query = `
-          SELECT ?item ?itemLabel ?poster ?year WHERE {
+          SELECT ?item ?itemLabel ?poster ?year
+            (GROUP_CONCAT(DISTINCT ?genreLabel; separator="|") AS ?genres)
+          WHERE {
             ?item wdt:P345 "${imdbId}".
             OPTIONAL { ?item wdt:P18 ?poster. }
             OPTIONAL { ?item wdt:P577 ?year. }
+            OPTIONAL {
+              ?item wdt:P136 ?genre.
+              ?genre rdfs:label ?genreLabel.
+              FILTER(LANG(?genreLabel) = "en")
+            }
             SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
           }
+          GROUP BY ?item ?itemLabel ?poster ?year
           LIMIT 1
         `;
 
@@ -103,6 +113,11 @@ const MovieCard: React.FC<MovieCardProps> = ({ imdbId, metadataEvent }) => {
           title: result.itemLabel?.value,
           poster: result.poster?.value,
           year: result.year?.value?.slice(0, 4),
+          genres: result.genres?.value
+            ? result.genres.value.split("|").map((g: string) =>
+                g.toLowerCase().trim().replace(/\s+films?$/i, "").trim()
+              ).filter(Boolean)
+            : [],
         };
 
         fallbackMovieCache.set(imdbId, fallback);
@@ -137,6 +152,10 @@ const MovieCard: React.FC<MovieCardProps> = ({ imdbId, metadataEvent }) => {
   const summary =
     activeEvent?.tags.find((t) => t[0] === "summary")?.[1] ||
     fallbackData?.summary;
+
+  const genres = activeEvent
+    ? activeEvent.tags.filter((t) => t[0] === "g" && t[1]).map((t) => t[1])
+    : fallbackData?.genres ?? [];
 
   const pubkey = activeEvent?.pubkey;
 
@@ -220,6 +239,14 @@ const MovieCard: React.FC<MovieCardProps> = ({ imdbId, metadataEvent }) => {
               <Typography variant="body2" color="text.secondary">
                 {year}
               </Typography>
+            )}
+
+            {genres.length > 0 && (
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                {genres.map((g) => (
+                  <Chip key={g} label={g} size="small" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+                ))}
+              </Box>
             )}
 
             {summary && (

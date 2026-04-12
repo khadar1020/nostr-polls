@@ -37,10 +37,22 @@ const CreateFAB: React.FC = () => {
   };
 
 
+  const actionSx = {
+    border: (theme: any) => `2px solid ${theme.palette.primary.main}`,
+  };
+
   return (
     <SpeedDial
       ariaLabel="Feed actions"
-      sx={{ position: "fixed", bottom: 24, right: 24, zIndex: 1000 }}
+      sx={{
+        position: "fixed",
+        bottom: 24,
+        right: 24,
+        zIndex: 1000,
+        "& .MuiFab-primary": {
+          border: (theme: any) => `2px solid ${theme.palette.primary.main}`,
+        },
+      }}
       icon={<SpeedDialIcon icon={<AddIcon />} />}
       open={open}
       onOpen={() => setOpen(true)}
@@ -51,17 +63,20 @@ const CreateFAB: React.FC = () => {
           icon={<KeyboardArrowUpIcon />}
           tooltipTitle="Back to top"
           onClick={handleScrollToTop}
+          sx={actionSx}
         />
       )}
       <SpeedDialAction
         icon={<RefreshIcon />}
         tooltipTitle="Refresh"
         onClick={handleRefresh}
+        sx={actionSx}
       />
       <SpeedDialAction
         icon={<AddIcon />}
         tooltipTitle="Create"
         onClick={handleCreate}
+        sx={actionSx}
       />
     </SpeedDial>
   );

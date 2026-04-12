@@ -8,28 +8,61 @@ interface Props {
   onChange: (value: number) => void;
   onChangeCommitted?: (value: number) => void;
   readOnly?: boolean;
+  /** Require a hold gesture before touch interaction is accepted */
+  requireHold?: boolean;
+  /** Called when the hold lock state changes (true = locked) */
+  onLockChange?: (locked: boolean) => void;
   size?: number; // star size in px
+  /** Fill colour for lit stars */
+  fillColor?: string;
 }
 
 const STARS = 5;
 const STEP = 0.1;
+const HOLD_MS = 400;
 
 const TouchRating: React.FC<Props> = ({
   value,
   onChange,
   onChangeCommitted,
   readOnly = false,
+  requireHold = false,
+  onLockChange,
   size = 32,
+  fillColor = "#FFB400",
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const [displayValue, setDisplayValue] = useState<number | null>(value);
 
+  // Hold-to-unlock state (only relevant when requireHold=true)
+  const [touchLocked, setTouchLocked] = useState(true);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeTouchX = useRef<number | null>(null);
+
   useEffect(() => {
     if (!isDragging.current) setDisplayValue(value);
   }, [value]);
 
-  const computeValue = useCallback((clientX: number): number => {
+  useEffect(() => {
+    return () => { if (holdTimer.current) clearTimeout(holdTimer.current); };
+  }, []);
+
+  const unlock = useCallback(() => {
+    setTouchLocked(false);
+    onLockChange?.(false);
+    navigator.vibrate?.(30);
+    // Immediately start rating from the finger's current position
+    if (activeTouchX.current !== null) {
+      const v = computeValueFromX(activeTouchX.current);
+      isDragging.current = true;
+      setDisplayValue(v);
+      onChange(v);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onChange, onLockChange]);
+
+  const computeValueFromX = useCallback((clientX: number): number => {
     if (!containerRef.current) return 0;
     const rect = containerRef.current.getBoundingClientRect();
     const ratio = (clientX - rect.left) / rect.width;
@@ -43,33 +76,63 @@ const TouchRating: React.FC<Props> = ({
     (e: React.TouchEvent) => {
       if (readOnly) return;
       e.stopPropagation();
+
+      if (requireHold && touchLocked) {
+        activeTouchX.current = e.touches[0].clientX;
+        holdTimer.current = setTimeout(unlock, HOLD_MS);
+        return;
+      }
+
       isDragging.current = true;
-      const v = computeValue(e.touches[0].clientX);
+      const v = computeValueFromX(e.touches[0].clientX);
       setDisplayValue(v);
       onChange(v);
     },
-    [readOnly, computeValue, onChange]
+    [readOnly, requireHold, touchLocked, unlock, computeValueFromX, onChange]
   );
 
   const handleTouchMove = useCallback(
     (e: React.TouchEvent) => {
-      if (readOnly || !isDragging.current) return;
+      if (readOnly) return;
       e.stopPropagation();
-      const v = computeValue(e.touches[0].clientX);
+
+      if (requireHold && touchLocked) {
+        // Track position so unlock() can use it
+        activeTouchX.current = e.touches[0].clientX;
+        return;
+      }
+
+      if (!isDragging.current) return;
+      const v = computeValueFromX(e.touches[0].clientX);
       setDisplayValue(v);
       onChange(v);
     },
-    [readOnly, computeValue, onChange]
+    [readOnly, requireHold, touchLocked, computeValueFromX, onChange]
   );
 
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent) => {
       if (readOnly) return;
       e.stopPropagation();
+
+      if (holdTimer.current) {
+        clearTimeout(holdTimer.current);
+        holdTimer.current = null;
+      }
+      activeTouchX.current = null;
+
+      if (requireHold && touchLocked) return; // hold was too short, ignore
+
       isDragging.current = false;
       if (displayValue != null) onChangeCommitted?.(displayValue);
+
+      // Re-lock for next interaction
+      if (requireHold) {
+        setTouchLocked(true);
+        onLockChange?.(true);
+      }
     },
-    [readOnly, displayValue, onChangeCommitted]
+    [readOnly, requireHold, touchLocked, displayValue, onChangeCommitted, onLockChange]
   );
 
   // ── Mouse (desktop) ──────────────────────────────────────────────────────
@@ -78,20 +141,20 @@ const TouchRating: React.FC<Props> = ({
       if (readOnly) return;
       e.preventDefault();
       isDragging.current = true;
-      const v = computeValue(e.clientX);
+      const v = computeValueFromX(e.clientX);
       setDisplayValue(v);
       onChange(v);
 
       const onMouseMove = (ev: MouseEvent) => {
         if (!isDragging.current) return;
-        const next = computeValue(ev.clientX);
+        const next = computeValueFromX(ev.clientX);
         setDisplayValue(next);
         onChange(next);
       };
 
       const onMouseUp = (ev: MouseEvent) => {
         isDragging.current = false;
-        const next = computeValue(ev.clientX);
+        const next = computeValueFromX(ev.clientX);
         setDisplayValue(next);
         onChangeCommitted?.(next);
         document.removeEventListener("mousemove", onMouseMove);
@@ -101,7 +164,7 @@ const TouchRating: React.FC<Props> = ({
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [readOnly, computeValue, onChange, onChangeCommitted]
+    [readOnly, computeValueFromX, onChange, onChangeCommitted]
   );
 
   return (
@@ -161,8 +224,8 @@ const TouchRating: React.FC<Props> = ({
                   sx={{
                     width: size,
                     height: size,
-                    color: "#FFB400",
-                    filter: "drop-shadow(0 0 6px rgba(255,180,0,0.55))",
+                    color: fillColor,
+                    filter: `drop-shadow(0 0 6px ${fillColor}88)`,
                   }}
                 />
               </Box>

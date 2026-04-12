@@ -61,7 +61,13 @@ const OptionsCard: React.FC<OptionsCardProps> = ({
                       size="small"
                       onClick={() => onClickAttach(index)}
                       disabled={uploadingIndex === index}
-                      sx={{ mr: 0.5 }}
+                      sx={{
+                        mr: 0.5,
+                        border: "1px solid",
+                        borderColor: "primary.main",
+                        borderRadius: "50%",
+                        color: "primary.main",
+                      }}
                     >
                       {uploadingIndex === index ? (
                         <CircularProgress size={18} />

@@ -8,8 +8,7 @@ const ctx: Worker = self as any;
 ctx.addEventListener("message", (event) => {
   const { event: nostrEvent, difficulty, tracker } = event.data;
 
-  const result = minePow(nostrEvent, difficulty, tracker);
-  console.log("ming result is", result);
+  minePow(nostrEvent, difficulty, tracker);
 });
 
 export function minePow(

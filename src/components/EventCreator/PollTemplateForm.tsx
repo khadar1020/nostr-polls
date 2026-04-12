@@ -285,6 +285,12 @@ const PollTemplateForm: React.FC<{
                   size="small"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploading || isSubmitting}
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "primary.main",
+                    borderRadius: "50%",
+                    color: "primary.main",
+                  }}
                 >
                   {isUploading ? <CircularProgress size={18} /> : <AttachFileIcon fontSize="small" />}
                 </IconButton>

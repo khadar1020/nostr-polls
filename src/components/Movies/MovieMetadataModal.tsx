@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import {
+  Autocomplete,
   Box,
   Button,
+  Chip,
   Modal,
   TextField,
   Typography,
@@ -18,6 +20,12 @@ import { waitForPublish } from "../../utils/publish";
 import { usePublishDiagnostic } from "../../hooks/usePublishDiagnostic";
 import { PublishDiagnosticModal } from "../Common/PublishDiagnosticModal";
 
+const GENRE_SUGGESTIONS = [
+  "action", "adventure", "animation", "biography", "comedy", "crime",
+  "documentary", "drama", "fantasy", "history", "horror", "music",
+  "mystery", "romance", "sci-fi", "sport", "thriller", "war", "western",
+];
+
 interface MovieMetadataModalProps {
   open: boolean;
   onClose: () => void;
@@ -33,6 +41,7 @@ const MovieMetadataModal: React.FC<MovieMetadataModalProps> = ({
   const [poster, setPoster] = useState("");
   const [year, setYear] = useState("");
   const [summary, setSummary] = useState("");
+  const [genres, setGenres] = useState<string[]>([]);
   const [tab, setTab] = useState(0);
   const [previewEvent, setPreviewEvent] = useState<Event>();
   const { relays } = useRelays();
@@ -52,15 +61,23 @@ const MovieMetadataModal: React.FC<MovieMetadataModalProps> = ({
     }
 
     const sparql = `
-SELECT ?itemLabel ?year ?article WHERE {
+SELECT ?itemLabel ?year ?article
+  (GROUP_CONCAT(DISTINCT ?genreLabel; separator="|") AS ?genres)
+WHERE {
   ?item wdt:P345 "${imdbId}".
   OPTIONAL { ?item wdt:P577 ?year. }
   OPTIONAL {
     ?article schema:about ?item ;
              schema:isPartOf <https://en.wikipedia.org/> .
   }
+  OPTIONAL {
+    ?item wdt:P136 ?genre.
+    ?genre rdfs:label ?genreLabel.
+    FILTER(LANG(?genreLabel) = "en")
+  }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 }
+GROUP BY ?itemLabel ?year ?article
 LIMIT 1
 `;
     const wikiDataUrl = `https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(sparql)}`;
@@ -88,6 +105,11 @@ LIMIT 1
       year,
       poster: wiki.thumbnail?.source || "",
       summary: wiki.extract || "",
+      genres: result.genres?.value
+        ? result.genres.value.split("|").map((g: string) =>
+            g.toLowerCase().trim().replace(/\s+films?$/i, "").trim()
+          ).filter(Boolean)
+        : [],
     };
 
     localStorage.setItem(cacheKey, JSON.stringify(fallback));
@@ -105,6 +127,7 @@ LIMIT 1
         setPoster((prev) => prev || fallback.poster);
         setYear((prev) => prev || fallback.year);
         setSummary((prev) => prev || fallback.summary);
+        setGenres((prev) => prev.length ? prev : (fallback.genres ?? []));
       }
 
       setPreviewEvent(await buildPreviewEvent());
@@ -119,6 +142,7 @@ LIMIT 1
     ...(poster ? [["poster", poster]] : []),
     ...(year ? [["year", year]] : []),
     ...(summary ? [["summary", summary]] : []),
+    ...genres.map((g) => ["g", g]),
   ];
 
   const buildPreviewEvent = async (): Promise<Event> => {
@@ -179,6 +203,24 @@ LIMIT 1
         label="Summary"
         value={summary}
         onChange={(e) => setSummary(e.target.value)}
+        sx={{ mb: 2 }}
+      />
+      <Autocomplete
+        multiple
+        freeSolo
+        options={GENRE_SUGGESTIONS}
+        value={genres}
+        onChange={(_, newValue) =>
+          setGenres(newValue.map((v) => v.toLowerCase().trim()).filter(Boolean))
+        }
+        renderTags={(value, getTagProps) =>
+          value.map((option, index) => (
+            <Chip label={option} size="small" {...getTagProps({ index })} key={option} />
+          ))
+        }
+        renderInput={(params) => (
+          <TextField {...params} label="Genres" placeholder="Add genre…" />
+        )}
         sx={{ mb: 2 }}
       />
       <Box sx={{ display: "flex", gap: 2 }}>

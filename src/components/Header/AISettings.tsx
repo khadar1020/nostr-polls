@@ -34,7 +34,6 @@ export const AISettings: React.FC = () => {
 
   const addLog = (msg: string) => {
     const ts = new Date().toISOString().slice(11, 23);
-    console.log(`[AISettings] ${msg}`);
     setDebugLog((prev) => [`[${ts}] ${msg}`, ...prev].slice(0, 30));
   };
 

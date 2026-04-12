@@ -34,6 +34,7 @@ export const useRating = (entityId: string) => {
         ["d", entityId],
         ["m", entityType],
         ["rating", normalizedRating.toFixed(3)],
+        ["s", String(Math.round(newRating))],
       ],
       content: content || "",
       pubkey: "",

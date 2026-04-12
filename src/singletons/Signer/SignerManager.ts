@@ -115,7 +115,6 @@ class SignerManager {
       const nip55Creds = await getNip55Credentials();
       if (nip55Creds) {
         // Use cached pubkey to avoid prompting Amber again
-        console.log("Restoring NIP-55 session with cached pubkey:", nip55Creds.pubkey);
         await this.loginWithNip55(nip55Creds.packageName, nip55Creds.pubkey);
         return;
       } else if (bunkerUri?.bunkerUri) {
@@ -127,8 +126,6 @@ class SignerManager {
       }
     } catch (e) {
       console.error("Signer restore failed:", e);
-      // If NIP-55 restore failed, clear credentials so user can re-login properly
-      console.log("Clearing NIP-55 credentials after restore failure");
       await removeNip55Credentials();
     }
 

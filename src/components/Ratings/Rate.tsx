@@ -25,12 +25,11 @@ const Rate: React.FC<Props> = ({ entityId, entityType = "event" }) => {
   const [showContentInput, setShowContentInput] = useState(false);
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [touchLocked, setTouchLocked] = useState(true);
   const userRating = getUserRating(ratingKey);
 
   useEffect(() => {
-    if (userRating) {
-      setRatingValue(userRating * 5);
-    }
+    if (userRating) setRatingValue(userRating * 5);
   }, [userRating]);
 
   const handleChange = (newValue: number) => {
@@ -59,28 +58,25 @@ const Rate: React.FC<Props> = ({ entityId, entityType = "event" }) => {
   };
 
   const displayedAvg = averageRating ? (averageRating * 5).toFixed(1) : null;
+  const displayValue = ratingValue ?? (averageRating ? averageRating * 5 : null);
 
   return (
     <Box onClick={(e) => e.stopPropagation()}>
       {/* Stars + live value */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
         <TouchRating
-          value={ratingValue ?? (averageRating ? averageRating * 5 : null)}
+          value={displayValue}
           onChange={handleChange}
           onChangeCommitted={handleChangeCommitted}
-          size={34}
+          requireHold
+          onLockChange={setTouchLocked}
+          size={32}
+          fillColor={ratingValue != null ? "#FFB400" : "#64B5F6"}
         />
 
-        {/* Numeric value — live during drag */}
         {(ratingValue != null || displayedAvg != null) && (
           <Chip
-            label={
-              isDragging && ratingValue != null
-                ? ratingValue.toFixed(1)
-                : ratingValue != null
-                ? ratingValue.toFixed(1)
-                : displayedAvg
-            }
+            label={ratingValue != null ? ratingValue.toFixed(1) : displayedAvg}
             size="small"
             sx={{
               fontWeight: 700,
@@ -94,8 +90,12 @@ const Rate: React.FC<Props> = ({ entityId, entityType = "event" }) => {
         )}
       </Box>
 
-      {/* Drag hint — only when no rating set yet */}
-      {ratingValue === null && (
+      {/* Hint */}
+      {touchLocked ? (
+        <Typography variant="caption" color="text.disabled" sx={{ fontSize: "0.68rem" }}>
+          Hold to rate
+        </Typography>
+      ) : (
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
           <SwipeIcon sx={{ fontSize: 14, color: "text.disabled" }} />
           <Typography variant="caption" color="text.disabled">
@@ -112,15 +112,12 @@ const Rate: React.FC<Props> = ({ entityId, entityType = "event" }) => {
       ) : null}
 
       {/* Review CTA */}
-      {!showContentInput && (
+      {!touchLocked && !showContentInput && (
         <Button
           variant="text"
           size="small"
           sx={{ mt: 0.5, px: 0, color: "text.secondary", fontSize: "0.75rem" }}
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowContentInput(true);
-          }}
+          onClick={(e) => { e.stopPropagation(); setShowContentInput(true); }}
         >
           Add a written review?
         </Button>
@@ -135,10 +132,7 @@ const Rate: React.FC<Props> = ({ entityId, entityType = "event" }) => {
             minRows={3}
             label="Your Review"
             value={content}
-            onChange={(e) => {
-              e.stopPropagation();
-              setContent(e.target.value);
-            }}
+            onChange={(e) => { e.stopPropagation(); setContent(e.target.value); }}
             onClick={(e) => e.stopPropagation()}
             sx={{ mt: 1.5 }}
           />
@@ -146,10 +140,7 @@ const Rate: React.FC<Props> = ({ entityId, entityType = "event" }) => {
             variant="contained"
             size="small"
             sx={{ mt: 1 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSubmit();
-            }}
+            onClick={(e) => { e.stopPropagation(); handleSubmit(); }}
           >
             Submit Review
           </Button>

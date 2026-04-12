@@ -25,7 +25,6 @@ export async function createNip46Signer(
 
   // 3️⃣ Instantiate the NIP-46 signer
   const bunker = new BunkerSigner(clientSecretKey, bp, params);
-  console.log("BUNKER Created", bunker);
 
   // 4️⃣ Handshake: ping → connect → get_public_key
   await bunker.connect();
