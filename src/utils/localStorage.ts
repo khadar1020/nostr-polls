@@ -8,6 +8,116 @@ const LOCAL_BUNKER_URI = "pollerama:bunkerUri";
 const LOCAL_APP_SECRET_KEY = "bunker:clientSecretKey";
 const LOCAL_USER_DATA = "pollerama:userData";
 
+// ---------------------------------------------------------------------------
+// Multi-account storage
+// ---------------------------------------------------------------------------
+const LOCAL_ACCOUNTS = "pollerama:accounts";
+const LOCAL_ACTIVE_ACCOUNT = "pollerama:activeAccount";
+
+export type LoginMethod = "nip07" | "nip46" | "nip55" | "nsec" | "guest";
+
+export type StoredUserData = {
+  pubkey: string;
+  name?: string;
+  picture?: string;
+  about?: string;
+};
+
+export type StoredAccount = {
+  pubkey: string;
+  loginMethod: LoginMethod;
+  /** Hex private key — guest/local accounts only */
+  secret?: string;
+  /** NIP-46 bunker URI */
+  bunkerUri?: string;
+  /** NIP-55 Android signer package name */
+  nip55PackageName?: string;
+  /** Cached profile data for instant display */
+  userData?: StoredUserData;
+};
+
+export const getStoredAccounts = (): StoredAccount[] => {
+  try {
+    const raw = localStorage.getItem(LOCAL_ACCOUNTS);
+    if (!raw) return [];
+    return JSON.parse(raw) as StoredAccount[];
+  } catch {
+    return [];
+  }
+};
+
+export const setStoredAccounts = (accounts: StoredAccount[]) => {
+  localStorage.setItem(LOCAL_ACCOUNTS, JSON.stringify(accounts));
+};
+
+export const addOrUpdateStoredAccount = (account: StoredAccount) => {
+  const accounts = getStoredAccounts();
+  const idx = accounts.findIndex((a) => a.pubkey === account.pubkey);
+  if (idx >= 0) accounts[idx] = account;
+  else accounts.push(account);
+  setStoredAccounts(accounts);
+};
+
+export const removeStoredAccount = (pubkey: string) => {
+  setStoredAccounts(getStoredAccounts().filter((a) => a.pubkey !== pubkey));
+};
+
+export const getActiveAccountPubkey = (): string | null =>
+  localStorage.getItem(LOCAL_ACTIVE_ACCOUNT);
+
+export const setActiveAccountPubkey = (pubkey: string) =>
+  localStorage.setItem(LOCAL_ACTIVE_ACCOUNT, pubkey);
+
+export const removeActiveAccountPubkey = () =>
+  localStorage.removeItem(LOCAL_ACTIVE_ACCOUNT);
+
+/**
+ * One-time migration from the old single-account storage format to the new
+ * multi-account format. Safe to call repeatedly — no-ops if already migrated.
+ */
+export const migrateToMultiAccount = () => {
+  if (localStorage.getItem(LOCAL_ACCOUNTS) !== null) return;
+
+  const oldKeys = JSON.parse(
+    localStorage.getItem(LOCAL_STORAGE_KEYS) || "{}"
+  ) as { pubkey?: string; secret?: string };
+  const oldBunkerUri = JSON.parse(
+    localStorage.getItem(LOCAL_BUNKER_URI) || "{}"
+  ) as { bunkerUri?: string };
+  let oldUser: User | null = null;
+  const oldUserDataRaw = localStorage.getItem(LOCAL_USER_DATA);
+  if (oldUserDataRaw) {
+    try {
+      const parsed = JSON.parse(oldUserDataRaw) as { user: User; expiresAt: number };
+      if (Date.now() <= parsed.expiresAt) oldUser = parsed.user;
+    } catch {}
+  }
+
+  if (!oldKeys.pubkey) {
+    setStoredAccounts([]);
+    return;
+  }
+
+  const loginMethod: LoginMethod = oldBunkerUri.bunkerUri
+    ? "nip46"
+    : oldKeys.secret
+    ? "guest"
+    : "nip07";
+
+  const account: StoredAccount = {
+    pubkey: oldKeys.pubkey,
+    loginMethod,
+    secret: oldKeys.secret,
+    bunkerUri: oldBunkerUri.bunkerUri,
+    userData: oldUser
+      ? { pubkey: oldUser.pubkey, name: oldUser.name, picture: oldUser.picture, about: oldUser.about }
+      : { pubkey: oldKeys.pubkey },
+  };
+
+  setStoredAccounts([account]);
+  setActiveAccountPubkey(oldKeys.pubkey);
+};
+
 type Keys = { pubkey: string; secret?: string };
 type BunkerUri = { bunkerUri: string };
 

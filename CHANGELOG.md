@@ -1,3 +1,7 @@
+# 1.8.0
+
+- Add multi account support!
+
 # 1.7.8
 
 - Different colors for community rating vs users own rating.

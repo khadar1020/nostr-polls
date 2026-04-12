@@ -41,3 +41,34 @@ export async function removeNip55Credentials() {
   await Preferences.remove({ key: NIP55_PACKAGE_KEY });
   await Preferences.remove({ key: NIP55_PUBKEY_KEY });
 }
+
+// ---------------------------------------------------------------------------
+// Per-account secure storage (multi-account support)
+// Keys are namespaced by pubkey so multiple accounts can coexist.
+// ---------------------------------------------------------------------------
+
+export async function saveNsecForAccount(pubkey: string, nsec: string) {
+  await Preferences.set({ key: `nostr_nsec_${pubkey}`, value: nsec });
+}
+
+export async function getNsecForAccount(pubkey: string): Promise<string | null> {
+  const { value } = await Preferences.get({ key: `nostr_nsec_${pubkey}` });
+  return value;
+}
+
+export async function removeNsecForAccount(pubkey: string) {
+  await Preferences.remove({ key: `nostr_nsec_${pubkey}` });
+}
+
+export async function saveNip55PkgForAccount(pubkey: string, packageName: string) {
+  await Preferences.set({ key: `nip55_pkg_${pubkey}`, value: packageName });
+}
+
+export async function getNip55PkgForAccount(pubkey: string): Promise<string | null> {
+  const { value } = await Preferences.get({ key: `nip55_pkg_${pubkey}` });
+  return value;
+}
+
+export async function removeNip55PkgForAccount(pubkey: string) {
+  await Preferences.remove({ key: `nip55_pkg_${pubkey}` });
+}

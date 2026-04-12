@@ -5,29 +5,40 @@ import { Event, EventTemplate, nip19 } from "nostr-tools";
 import { defaultRelays, fetchUserProfile } from "../../nostr";
 import { publishInboxRelays } from "../../nostr/nip17";
 import {
-  getBunkerUriInLocalStorage,
-  getKeysFromLocalStorage,
-  setBunkerUriInLocalStorage,
-  setKeysInLocalStorage,
-  setUserDataInLocalStorage,
-  getUserDataFromLocalStorage,
-  removeUserDataFromLocalStorage,
-  removeKeysFromLocalStorage,
-  removeBunkerUriFromLocalStorage,
-  removeAppSecretFromLocalStorage,
+  getStoredAccounts,
+  addOrUpdateStoredAccount,
+  removeStoredAccount,
+  getActiveAccountPubkey,
+  setActiveAccountPubkey,
+  removeActiveAccountPubkey,
+  migrateToMultiAccount,
+  StoredAccount,
+  StoredUserData,
 } from "../../utils/localStorage";
 import { DEFAULT_IMAGE_URL } from "../../utils/constants";
 import { ANONYMOUS_USER_NAME, User } from "../../contexts/user-context";
 import { pool } from "..";
 import { createLocalSigner } from "./LocalSigner";
 import { isNative } from "../../utils/platform";
-import { getNsec, removeNsec, saveNsec, getNip55Credentials, saveNip55Credentials, removeNip55Credentials } from "../../utils/secureKeyStorage";
+import {
+  getNsec,
+  removeNsec,
+  getNip55Credentials,
+  removeNip55Credentials,
+  saveNsecForAccount,
+  getNsecForAccount,
+  removeNsecForAccount,
+  saveNip55PkgForAccount,
+  getNip55PkgForAccount,
+  removeNip55PkgForAccount,
+} from "../../utils/secureKeyStorage";
 import { bytesToHex } from "@noble/hashes/utils";
 import { createNIP55Signer } from "./NIP55Signer";
 
 class SignerManager {
   private signer: NostrSigner | null = null;
   private user: User | null = null;
+  private accounts: StoredAccount[] = [];
   private onChangeCallbacks: Set<() => void> = new Set();
   private loginModalCallback: (() => Promise<void>) | null = null;
   private pendingSignPromises: Map<string, (event: Event) => void> = new Map();
@@ -37,6 +48,44 @@ class SignerManager {
     this.initPromise = this.restoreFromStorage().finally(() => {
       this.initPromise = null;
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
+  getAccounts(): StoredAccount[] {
+    return this.accounts;
+  }
+
+  async switchAccount(pubkey: string) {
+    const account = this.accounts.find((a) => a.pubkey === pubkey);
+    if (!account) throw new Error(`Account ${pubkey} not found`);
+    await this.activateAccount(account);
+    setActiveAccountPubkey(pubkey);
+    this.notify();
+  }
+
+  async removeAccount(pubkey: string) {
+    if (isNative) {
+      await removeNsecForAccount(pubkey);
+      await removeNip55PkgForAccount(pubkey);
+    }
+    removeStoredAccount(pubkey);
+    this.accounts = getStoredAccounts();
+
+    if (this.user?.pubkey === pubkey) {
+      if (this.accounts.length > 0) {
+        await this.activateAccount(this.accounts[0]);
+        setActiveAccountPubkey(this.accounts[0].pubkey);
+      } else {
+        this.signer = null;
+        this.user = null;
+        removeActiveAccountPubkey();
+      }
+    }
+
+    this.notify();
   }
 
   async publishKind0(user: User) {
@@ -54,32 +103,32 @@ class SignerManager {
     };
     const signedKind0 = await this.signer.signEvent(kind0Event);
     pool.publish(defaultRelays, signedKind0);
-
-    // Here you should publish the event to Nostr relays
-    // Example: await relayPool.publish(kind0Event);
-    // Or call your existing function to publish events
-
-    // TODO: Replace with your actual event publish method
   }
 
   async loginWithNip55(packageName: string, cachedPubkey?: string) {
     const signer = createNIP55Signer(packageName, cachedPubkey);
-
-    // Step 1: ask Amber for pubkey (skipped if cachedPubkey provided)
     const pubkey = await signer.getPublicKey();
 
-    // Step 2: fetch kind0 profile
     const kind0 = await fetchUserProfile(pubkey);
-    const userData = kind0
+    const userData: User = kind0
       ? { ...JSON.parse(kind0.content), pubkey }
       : { pubkey, name: ANONYMOUS_USER_NAME, picture: DEFAULT_IMAGE_URL };
 
-    // Step 3: save signer and user
     this.signer = signer;
     this.user = userData;
-    await saveNip55Credentials(packageName, pubkey);
 
-    setUserDataInLocalStorage(userData);
+    if (isNative) await saveNip55PkgForAccount(pubkey, packageName);
+
+    const account: StoredAccount = {
+      pubkey,
+      loginMethod: "nip55",
+      nip55PackageName: packageName,
+      userData: toStoredUserData(userData),
+    };
+    addOrUpdateStoredAccount(account);
+    this.accounts = getStoredAccounts();
+    setActiveAccountPubkey(pubkey);
+
     this.notify();
   }
 
@@ -89,7 +138,6 @@ class SignerManager {
       console.warn("No pending sign promise for event", event.id);
       return;
     }
-
     resolver(event);
     this.pendingSignPromises.delete(event.id);
   }
@@ -97,56 +145,41 @@ class SignerManager {
   registerLoginModal(callback: () => Promise<void>) {
     this.loginModalCallback = callback;
   }
+
   async restoreFromStorage() {
-    const cachedUser = getUserDataFromLocalStorage();
-    if (cachedUser) this.user = cachedUser.user;
+    // One-time migration from the old single-account storage format
+    migrateToMultiAccount();
+
+    // Migrate legacy Capacitor Preferences keys if needed (native only)
+    if (isNative) {
+      await this.migrateSecureStorage();
+    }
+
+    this.accounts = getStoredAccounts();
+
+    if (this.accounts.length === 0) {
+      this.notify();
+      return;
+    }
+
+    const activePubkey = getActiveAccountPubkey();
+    const accountToActivate =
+      (activePubkey ? this.accounts.find((a) => a.pubkey === activePubkey) : null) ??
+      this.accounts[0];
+
+    // Pre-populate user from cache for instant display while signer initialises
+    if (accountToActivate.userData) {
+      this.user = buildUser(accountToActivate);
+    }
 
     try {
-      if (isNative) {
-        const nsec = await getNsec();
-        if (nsec) {
-          await this.loginWithNsec(nsec);
-          return;
-        }
-      }
-
-      const bunkerUri = getBunkerUriInLocalStorage();
-      const keys = getKeysFromLocalStorage();
-      const nip55Creds = await getNip55Credentials();
-      if (nip55Creds) {
-        // Use cached pubkey to avoid prompting Amber again
-        await this.loginWithNip55(nip55Creds.packageName, nip55Creds.pubkey);
-        return;
-      } else if (bunkerUri?.bunkerUri) {
-        await this.loginWithNip46(bunkerUri.bunkerUri);
-      } else if (!isNative && window.nostr) {
-        await this.loginWithNip07();
-      } else if (keys?.pubkey && keys?.secret) {
-        await this.loginWithGuestKey(keys.pubkey, keys.secret);
-      }
+      await this.activateAccount(accountToActivate);
+      setActiveAccountPubkey(accountToActivate.pubkey);
     } catch (e) {
       console.error("Signer restore failed:", e);
-      await removeNip55Credentials();
     }
 
     this.notify();
-  }
-
-  private async loginWithGuestKey(pubkey: string, privkey: string) {
-    this.signer = createLocalSigner(privkey);
-
-    const kind0: Event | null = await fetchUserProfile(pubkey);
-    const userData: User = kind0
-      ? { ...JSON.parse(kind0.content), pubkey, privateKey: privkey }
-      : {
-          pubkey,
-          name: ANONYMOUS_USER_NAME,
-          picture: DEFAULT_IMAGE_URL,
-          privateKey: privkey,
-        };
-
-    setUserDataInLocalStorage(userData);
-    this.user = userData;
   }
 
   async loginWithNsec(nsec: string) {
@@ -156,7 +189,6 @@ class SignerManager {
     if (!privkey) throw new Error("Invalid nsec");
 
     this.signer = createLocalSigner(bytesToHex(privkey));
-
     const pubkey = await this.signer.getPublicKey();
 
     const kind0 = await fetchUserProfile(pubkey);
@@ -164,8 +196,16 @@ class SignerManager {
       ? { ...JSON.parse(kind0.content), pubkey }
       : { pubkey, name: ANONYMOUS_USER_NAME, picture: DEFAULT_IMAGE_URL };
 
-    await saveNsec(nsec);
-    setUserDataInLocalStorage(userData);
+    await saveNsecForAccount(pubkey, nsec);
+
+    const account: StoredAccount = {
+      pubkey,
+      loginMethod: "nsec",
+      userData: toStoredUserData(userData),
+    };
+    addOrUpdateStoredAccount(account);
+    this.accounts = getStoredAccounts();
+    setActiveAccountPubkey(pubkey);
 
     this.user = userData;
     this.notify();
@@ -176,10 +216,8 @@ class SignerManager {
     userMetadata: { name?: string; picture?: string; about?: string },
   ) {
     this.signer = createLocalSigner(privkey);
-
     const pubkey = await this.signer.getPublicKey();
 
-    // Build user object
     const userData: User = {
       pubkey,
       name: userMetadata.name || "Guest",
@@ -188,16 +226,19 @@ class SignerManager {
       privateKey: privkey,
     };
 
-    // Save keys and user data
-    setKeysInLocalStorage(pubkey, privkey);
-    setUserDataInLocalStorage(userData);
+    const account: StoredAccount = {
+      pubkey,
+      loginMethod: "guest",
+      secret: privkey,
+      userData: toStoredUserData(userData),
+    };
+    addOrUpdateStoredAccount(account);
+    this.accounts = getStoredAccounts();
+    setActiveAccountPubkey(pubkey);
 
     this.user = userData;
 
-    // Optionally, send kind-0 event to publish metadata on Nostr network
     await this.publishKind0(userData);
-
-    // Publish DM inbox relays (kind:10050) for NIP-17 compliance
     await publishInboxRelays(defaultRelays);
 
     this.notify();
@@ -207,53 +248,63 @@ class SignerManager {
     if (!window.nostr) throw new Error("NIP-07 extension not found");
     this.signer = nip07Signer;
     const pubkey = await window.nostr.getPublicKey();
-    setKeysInLocalStorage(pubkey);
 
     const kind0: Event | null = await fetchUserProfile(pubkey);
     const userData: User = kind0
       ? { ...JSON.parse(kind0.content), pubkey }
       : { pubkey, name: ANONYMOUS_USER_NAME, picture: DEFAULT_IMAGE_URL };
 
+    const account: StoredAccount = {
+      pubkey,
+      loginMethod: "nip07",
+      userData: toStoredUserData(userData),
+    };
+    addOrUpdateStoredAccount(account);
+    this.accounts = getStoredAccounts();
+    setActiveAccountPubkey(pubkey);
+
     this.user = userData;
-    setUserDataInLocalStorage(userData);
     this.notify();
   }
 
   async loginWithNip46(bunkerUri: string) {
     const remoteSigner = await createNip46Signer(bunkerUri);
     const pubkey = await remoteSigner.getPublicKey();
-    setKeysInLocalStorage(pubkey);
 
     const kind0: Event | null = await fetchUserProfile(pubkey);
     const userData: User = kind0
       ? { ...JSON.parse(kind0.content), pubkey }
       : { pubkey, name: ANONYMOUS_USER_NAME, picture: DEFAULT_IMAGE_URL };
 
-    setUserDataInLocalStorage(userData);
-    setBunkerUriInLocalStorage(bunkerUri);
+    const account: StoredAccount = {
+      pubkey,
+      loginMethod: "nip46",
+      bunkerUri,
+      userData: toStoredUserData(userData),
+    };
+    addOrUpdateStoredAccount(account);
+    this.accounts = getStoredAccounts();
+    setActiveAccountPubkey(pubkey);
 
     this.signer = remoteSigner;
     this.user = userData;
     this.notify();
   }
+
+  /** Removes the active account and switches to the next one (or logs out). */
   async logout() {
-    this.signer = null;
-    this.user = null;
-
-    removeNsec();
-    removeKeysFromLocalStorage();
-    removeBunkerUriFromLocalStorage();
-    removeAppSecretFromLocalStorage();
-    removeUserDataFromLocalStorage();
-    await removeNip55Credentials();
-
-    this.notify();
+    if (this.user?.pubkey) {
+      await this.removeAccount(this.user.pubkey);
+    } else {
+      this.signer = null;
+      this.user = null;
+      this.notify();
+    }
   }
 
   async getSigner(): Promise<NostrSigner> {
     if (this.signer) return this.signer;
 
-    // Still initialising — wait for it before deciding to show the login modal
     if (this.initPromise) {
       await this.initPromise;
       if (this.signer) return this.signer;
@@ -276,9 +327,94 @@ class SignerManager {
     return () => this.onChangeCallbacks.delete(cb);
   }
 
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  /** Create and install the right NostrSigner for the given stored account. */
+  private async activateAccount(account: StoredAccount) {
+    switch (account.loginMethod) {
+      case "guest": {
+        if (!account.secret) throw new Error("No secret for guest account");
+        this.signer = createLocalSigner(account.secret);
+        break;
+      }
+      case "nsec": {
+        if (!isNative) throw new Error("nsec only supported on native");
+        const nsec = await getNsecForAccount(account.pubkey);
+        if (!nsec) throw new Error("nsec not found in secure storage");
+        const privkey = nip19.decode(nsec).data as Uint8Array;
+        this.signer = createLocalSigner(bytesToHex(privkey));
+        break;
+      }
+      case "nip07": {
+        this.signer = nip07Signer;
+        break;
+      }
+      case "nip46": {
+        if (!account.bunkerUri) throw new Error("No bunker URI for NIP-46 account");
+        this.signer = await createNip46Signer(account.bunkerUri);
+        break;
+      }
+      case "nip55": {
+        const pkgName =
+          account.nip55PackageName ??
+          (isNative ? await getNip55PkgForAccount(account.pubkey) : null);
+        if (!pkgName) throw new Error("No NIP-55 package name");
+        this.signer = createNIP55Signer(pkgName, account.pubkey);
+        break;
+      }
+    }
+
+    this.user = buildUser(account);
+  }
+
+  /** Migrate legacy single-slot Capacitor Preferences keys to per-account keys. */
+  private async migrateSecureStorage() {
+    const accounts = getStoredAccounts();
+
+    // Migrate nsec
+    const legacyNsec = await getNsec();
+    if (legacyNsec) {
+      const nsecAccount = accounts.find((a) => a.loginMethod === "nsec");
+      if (nsecAccount) {
+        const already = await getNsecForAccount(nsecAccount.pubkey);
+        if (!already) await saveNsecForAccount(nsecAccount.pubkey, legacyNsec);
+      }
+      await removeNsec();
+    }
+
+    // Migrate NIP-55 credentials
+    const legacyCreds = await getNip55Credentials();
+    if (legacyCreds) {
+      const already = await getNip55PkgForAccount(legacyCreds.pubkey);
+      if (!already) await saveNip55PkgForAccount(legacyCreds.pubkey, legacyCreds.packageName);
+      await removeNip55Credentials();
+    }
+  }
+
   private notify() {
     this.onChangeCallbacks.forEach((cb) => cb());
   }
+}
+
+// ---------------------------------------------------------------------------
+// Module-level helpers
+// ---------------------------------------------------------------------------
+
+function toStoredUserData(user: User): StoredUserData {
+  return { pubkey: user.pubkey, name: user.name, picture: user.picture, about: user.about };
+}
+
+function buildUser(account: StoredAccount): User {
+  const base: User = account.userData
+    ? { ...account.userData, pubkey: account.pubkey }
+    : { pubkey: account.pubkey, name: ANONYMOUS_USER_NAME, picture: DEFAULT_IMAGE_URL };
+
+  if (account.loginMethod === "guest" && account.secret) {
+    base.privateKey = account.secret;
+  }
+  return base;
 }
 
 export const signerManager = new SignerManager();
