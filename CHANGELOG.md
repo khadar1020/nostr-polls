@@ -1,3 +1,9 @@
+# 1.7.8
+- Different colors for community rating vs users own rating
+- Fixed follow-pack bookmark bug.
+- Ratings gesture now waits to hold before being activated, preventing accidental ratings while scrolling.
+- Visibility uplift for some buttons
+
 # 1.7.7
 - Add a notification customizer while replying to threads.
 - Fix missing notifications and refresh notifications when visiting notif screen.

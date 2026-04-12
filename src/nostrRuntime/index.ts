@@ -1,4 +1,4 @@
-import { Event, Filter, SimplePool } from 'nostr-tools';
+import { Event, Filter, Relay, SimplePool } from 'nostr-tools';
 import { EventStore } from './EventStore';
 import { SubscriptionManager } from './SubscriptionManager';
 import {
@@ -316,6 +316,95 @@ export class NostrRuntime {
 
     // Fallback: resolve remaining with null after 8 s
     setTimeout(finish, 8000);
+  }
+
+  /**
+   * Fetch a single event by ID with per-relay diagnostics.
+   * Unlike fetchBatched, this subscribes to each relay individually so it can
+   * report which relays confirmed a miss (EOSE) vs which timed out.
+   *
+   * @param relays - Relay URLs to query
+   * @param id     - Event ID to look for
+   * @returns Diagnostic result including the event (or null) and per-relay info
+   */
+  async fetchWithDiagnostics(
+    relays: string[],
+    id: string
+  ): Promise<import('./types').FetchDiagnostics> {
+    // Cache hit — return immediately with empty diagnostics
+    const cached = this.eventStore.getById(id);
+    if (cached) {
+      return { event: cached, relayResults: [], durationMs: 0 };
+    }
+
+    const startTime = Date.now();
+    // Build result entries up-front so index is stable even after early finish
+    const relayResults: import('./types').RelayFetchResult[] = relays.map((r) => ({
+      relay: r,
+      eosed: false,
+    }));
+    let foundEvent: Event | null = null;
+    let done = false;
+    // Track open Relay connections so we can close them on finish
+    const openRelays: Relay[] = [];
+
+    return new Promise((resolve) => {
+      const finish = () => {
+        if (done) return;
+        done = true;
+        for (const r of openRelays) {
+          try { r.close(); } catch { /* already closed */ }
+        }
+        resolve({ event: foundEvent, relayResults, durationMs: Date.now() - startTime });
+      };
+
+      // Count how many relays still haven't replied (event or EOSE).
+      // When it hits zero we're done.
+      let pending = relays.length;
+      if (pending === 0) { finish(); return; }
+
+      const oneDone = () => { if (--pending <= 0) finish(); };
+
+      for (let i = 0; i < relays.length; i++) {
+        const url = relays[i];
+        const entry = relayResults[i];
+
+        // Each relay gets its own independent connection so oneose is
+        // unambiguously scoped to that single relay (SimplePool batches
+        // EOSE across relays and fires too early for diagnostic purposes).
+        Relay.connect(url)
+          .then((relay) => {
+            if (done) { relay.close(); return; }
+            openRelays.push(relay);
+
+            relay.subscribe([{ ids: [id] }], {
+              onevent(event) {
+                if (event.id === id && !foundEvent) {
+                  foundEvent = event;
+                  finish();
+                }
+              },
+              oneose() {
+                // This relay definitively has no match — it sent EOSE
+                entry.eosed = true;
+                oneDone();
+              },
+              onclose() {
+                // Relay closed before sending EOSE (connection dropped, auth
+                // required, etc.) — treat as a non-response, not a confirmed miss
+                oneDone();
+              },
+            });
+          })
+          .catch(() => {
+            // Could not connect at all — count as non-response
+            oneDone();
+          });
+      }
+
+      // Hard timeout: resolve after 10 s regardless of how many relays replied
+      setTimeout(finish, 10000);
+    });
   }
 
   /**

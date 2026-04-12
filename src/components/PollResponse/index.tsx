@@ -10,6 +10,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { nostrRuntime } from "../../singletons";
 import { nip19 } from "nostr-tools";
 import { EventPointer } from "nostr-tools/lib/types/nip19";
+import { defaultRelays } from "../../nostr";
 
 export const PollResponse = () => {
   const { eventId: neventId } = useParams();
@@ -29,20 +30,21 @@ export const PollResponse = () => {
     const decoded = nip19.decode(neventId).data as EventPointer;
     const neventRelays = decoded.relays;
     const relaysToUse = Array.from(
-      new Set([...relays, ...(neventRelays || [])])
+      new Set([...relays, ...defaultRelays, ...(neventRelays || [])])
     );
     try {
       const event = await nostrRuntime.fetchBatched(relaysToUse, decoded.id);
       if (event === null) {
-        showNotification(NOTIFICATION_MESSAGES.POLL_NOT_FOUND, "error");
-        navigate("/");
+        // Navigate to the note page — it shows the event if found on gossip relays,
+        // or a relay diagnostic screen so the user can see what was tried.
+        navigate(`/note/${neventId}`, { replace: true });
         return;
       }
       setPollEvent(event);
     } catch (error) {
       console.error("Error fetching poll event:", error);
       showNotification(NOTIFICATION_MESSAGES.POLL_FETCH_ERROR, "error");
-      navigate("/");
+      navigate(`/note/${neventId}`, { replace: true });
     }
   };
 

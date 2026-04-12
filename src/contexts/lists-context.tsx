@@ -5,7 +5,7 @@ import { useRelays } from "../hooks/useRelays";
 import { useUserContext } from "../hooks/useUserContext";
 import { useAppContext } from "../hooks/useAppContext";
 import { User } from "./user-context";
-import { pool, nostrRuntime } from "../singletons";
+import { nostrRuntime } from "../singletons";
 import { signerManager } from "../singletons/Signer/SignerManager";
 
 const WOT_STORAGE_KEY_PREFIX = `pollerama:webOfTrust`;
@@ -223,7 +223,7 @@ export function ListProvider({ children }: { children: ReactNode }) {
       content: encrypted,
     };
     const signed = await signer.signEvent(template);
-    await Promise.allSettled(pool.publish(relays, signed));
+    await Promise.allSettled(nostrRuntime.publish(relays, signed));
     return signed;
   };
 
@@ -389,7 +389,7 @@ export function ListProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) return;
-    if (!pool) return;
+    if (!nostrRuntime) return;
     if (user) {
       if (!lists) fetchLists();
       if (!user.follows || user.follows.length === 0) fetchContacts();
@@ -456,7 +456,7 @@ export function ListProvider({ children }: { children: ReactNode }) {
             };
 
             const signed = await signer.signEvent(eventTemplate);
-            await Promise.allSettled(pool.publish(relays, signed));
+            await Promise.allSettled(nostrRuntime.publish(relays, signed));
             processMyTopicsFromEvent(signed);
             fetchMyTopics();
             resolve();
@@ -485,7 +485,7 @@ export function ListProvider({ children }: { children: ReactNode }) {
           };
 
           const signed = await signer.signEvent(eventTemplate);
-          await Promise.allSettled(pool.publish(relays, signed));
+          await Promise.allSettled(nostrRuntime.publish(relays, signed));
           processMyTopicsFromEvent(signed);
           fetchMyTopics();
           resolve();
@@ -538,7 +538,7 @@ export function ListProvider({ children }: { children: ReactNode }) {
             };
 
             const signed = await signer.signEvent(eventTemplate);
-            await Promise.allSettled(pool.publish(relays, signed));
+            await Promise.allSettled(nostrRuntime.publish(relays, signed));
 
             // Update local state immediately
             processMyTopicsFromEvent(signed);
@@ -571,7 +571,7 @@ export function ListProvider({ children }: { children: ReactNode }) {
     };
     const signer = await signerManager.getSigner();
     const signed = await signer.signEvent(newEvent);
-    await Promise.allSettled(pool.publish(relays, signed));
+    await Promise.allSettled(nostrRuntime.publish(relays, signed));
     setUser((prev) => {
       if (!prev) return null;
       return { ...prev, follows: (prev.follows || []).filter(pk => pk !== pubkeyToRemove) };

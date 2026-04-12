@@ -90,6 +90,24 @@ export interface RuntimeStats {
 }
 
 /**
+ * Per-relay result from a diagnostic fetch
+ */
+export interface RelayFetchResult {
+  relay: string;
+  /** true = relay sent EOSE (confirmed no match), false = timed out / no response */
+  eosed: boolean;
+}
+
+/**
+ * Diagnostics returned by fetchWithDiagnostics()
+ */
+export interface FetchDiagnostics {
+  event: import('nostr-tools').Event | null;
+  relayResults: RelayFetchResult[];
+  durationMs: number;
+}
+
+/**
  * Debug information about a subscription
  */
 export interface SubscriptionDebugInfo {
