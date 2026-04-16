@@ -21,11 +21,15 @@ import { pool } from "..";
 import { createLocalSigner } from "./LocalSigner";
 import { isNative } from "../../utils/platform";
 import {
+  getLegacyNsec,
+  removeLegacyNsec,
   getNip55Credentials,
   removeNip55Credentials,
   saveNsecForAccount,
   getNsecForAccount,
   removeNsecForAccount,
+  getLegacyNsecForAccount,
+  removeLegacyNsecForAccount,
   saveNip55PkgForAccount,
   getNip55PkgForAccount,
   removeNip55PkgForAccount,
@@ -369,6 +373,35 @@ class SignerManager {
 
   /** Migrate legacy single-slot Capacitor Preferences keys to per-account keys. */
   private async migrateSecureStorage() {
+    const accounts = getStoredAccounts();
+
+    // Migrate nsec
+    const legacyNsec = await getLegacyNsec();
+    if (legacyNsec) {
+      const nsecAccount = accounts.find((a) => a.loginMethod === "nsec");
+      if (nsecAccount) {
+        const already = await getNsecForAccount(nsecAccount.pubkey);
+        if (!already) await saveNsecForAccount(nsecAccount.pubkey, legacyNsec);
+      }
+      await removeLegacyNsec();
+    }
+
+    for (const account of accounts) {
+      if (account.loginMethod !== "nsec") continue;
+
+      const already = await getNsecForAccount(account.pubkey);
+      if (already) {
+        await removeLegacyNsecForAccount(account.pubkey);
+        continue;
+      }
+
+      const legacyAccountNsec = await getLegacyNsecForAccount(account.pubkey);
+      if (!legacyAccountNsec) continue;
+
+      await saveNsecForAccount(account.pubkey, legacyAccountNsec);
+      await removeLegacyNsecForAccount(account.pubkey);
+    }
+
     // Migrate NIP-55 credentials
     const legacyCreds = await getNip55Credentials();
     if (legacyCreds) {

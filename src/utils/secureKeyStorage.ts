@@ -43,6 +43,15 @@ async function secureRemove(key: string) {
   await Preferences.remove({ key });
 }
 
+async function getLegacyPreference(key: string): Promise<string | null> {
+  const { value } = await Preferences.get({ key });
+  return value;
+}
+
+async function removeLegacyPreference(key: string) {
+  await Preferences.remove({ key });
+}
+
 export async function saveNsec(nsec: string) {
   await secureSet(NSEC_KEY, nsec);
 }
@@ -53,6 +62,14 @@ export async function getNsec(): Promise<string | null> {
 
 export async function removeNsec() {
   await secureRemove(NSEC_KEY);
+}
+
+export async function getLegacyNsec(): Promise<string | null> {
+  return getLegacyPreference(NSEC_KEY);
+}
+
+export async function removeLegacyNsec() {
+  await removeLegacyPreference(NSEC_KEY);
 }
 
 const NIP55_PACKAGE_KEY = "nip55_package_name";
@@ -93,6 +110,14 @@ export async function getNsecForAccount(pubkey: string): Promise<string | null> 
 
 export async function removeNsecForAccount(pubkey: string) {
   await secureRemove(getAccountNsecKey(pubkey));
+}
+
+export async function getLegacyNsecForAccount(pubkey: string): Promise<string | null> {
+  return getLegacyPreference(getAccountNsecKey(pubkey));
+}
+
+export async function removeLegacyNsecForAccount(pubkey: string) {
+  await removeLegacyPreference(getAccountNsecKey(pubkey));
 }
 
 export async function saveNip55PkgForAccount(pubkey: string, packageName: string) {
