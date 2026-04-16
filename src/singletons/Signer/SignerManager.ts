@@ -21,8 +21,6 @@ import { pool } from "..";
 import { createLocalSigner } from "./LocalSigner";
 import { isNative } from "../../utils/platform";
 import {
-  getNsec,
-  removeNsec,
   getNip55Credentials,
   removeNip55Credentials,
   saveNsecForAccount,
@@ -371,19 +369,6 @@ class SignerManager {
 
   /** Migrate legacy single-slot Capacitor Preferences keys to per-account keys. */
   private async migrateSecureStorage() {
-    const accounts = getStoredAccounts();
-
-    // Migrate nsec
-    const legacyNsec = await getNsec();
-    if (legacyNsec) {
-      const nsecAccount = accounts.find((a) => a.loginMethod === "nsec");
-      if (nsecAccount) {
-        const already = await getNsecForAccount(nsecAccount.pubkey);
-        if (!already) await saveNsecForAccount(nsecAccount.pubkey, legacyNsec);
-      }
-      await removeNsec();
-    }
-
     // Migrate NIP-55 credentials
     const legacyCreds = await getNip55Credentials();
     if (legacyCreds) {
